@@ -164,6 +164,9 @@ contract GenericCream is GenericLenderBase {
 
     //we use different method to withdraw for safety
     function withdrawAll() external override management returns (bool all) {
+        //redo or else price changes
+        cToken.mint(0);
+        
         uint256 liquidity = want.balanceOf(address(cToken));
         uint256 liquidityInCTokens = convertFromUnderlying(liquidity);
         uint256 amountInCtokens = cToken.balanceOf(address(this));
@@ -176,8 +179,6 @@ contract GenericCream is GenericLenderBase {
                 all = true;
                 cToken.redeem(amountInCtokens);
             } else {
-                //redo or else price changes
-                cToken.mint(0);
                 liquidityInCTokens = convertFromUnderlying(want.balanceOf(address(cToken)));
                 //take all we can
                 all = false;
