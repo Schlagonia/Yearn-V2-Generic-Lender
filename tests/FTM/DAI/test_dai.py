@@ -21,132 +21,80 @@ def test_normal_activity(
     currency = ftm_dai
     starting_balance = currency.balanceOf(strategist)
 
-    decimals = currency.decimals()
-    #print(vault.withdrawalQueue(1))
-
-    #strat2 = Contract(vault.withdrawalQueue(1))
-    
     currency.approve(vault, 2 ** 256 - 1, {"from": whale})
     currency.approve(vault, 2 ** 256 - 1, {"from": strategist})
 
-    deposit_limit = 1_000_000_000 * (10 ** (decimals))
-    debt_ratio = 10_000
-    
-    vault.addStrategy(strategy, debt_ratio, 0, 2 ** 256 - 1, 1000, {"from": gov})
-    vault.setDepositLimit(deposit_limit, {"from": gov})
+    deposit_limit = 10_000
+    vault.addStrategy(strategy, deposit_limit, 0, 2 ** 256 - 1, 1000, {"from": gov})
 
-    assert deposit_limit == vault.depositLimit()
-    # our humble strategist deposits some test funds
-    depositAmount = 501 * (10 ** (decimals))
-    currency.transfer(strategist, depositAmount, {"from": whale})
-    vault.deposit(depositAmount, {"from": strategist})
-
-    #assert strategy.estimatedTotalAssets() == 0
-    chain.mine(1)
-    #assert strategy.harvestTrigger(1) == True
-
-    strategy.harvest({"from": strategist})
-
-    #assert (
-    #    strategy.estimatedTotalAssets() >= depositAmount * 0.999999
-    #)  # losing some dust is ok
-
-    #assert strategy.harvestTrigger(1) == False
-    # whale deposits as well
-    whale_deposit = 1_000_000 * (10 ** (decimals))
+    whale_deposit = 1_000_000 * 1e18
     vault.deposit(whale_deposit, {"from": whale})
-    #assert strategy.harvestTrigger(1000) == True
-
-    strategy.harvest({"from": strategist})
-    #strat2.harvest({"from": gov})
+    chain.sleep(10)
+    chain.mine(1)
+    strategy.setWithdrawalThreshold(0, {"from": gov})
+    #assert strategy.harvestTrigger(1 * 1e18) == True
+    print(whale_deposit / 1e18)
     status = strategy.lendStatuses()
     form = "{:.2%}"
     formS = "{:,.0f}"
     for j in status:
         print(
-            f"Lender: {j[0]}, Deposits: {formS.format(j[1]/1e6)} APR: {form.format(j[2]/1e18)}"
+            f"Lender: {j[0]}, Deposits: {formS.format(j[1]/1e18)} APR: {form.format(j[2]/1e18)}"
         )
 
-    for i in range(5):
-        waitBlock = random.randint(10, 50)
-        scrDai.mint(0, {"from": whale})
-        chain.sleep(15 * 30)
+
+    strategy.harvest({"from": strategist})
+
+    status = strategy.lendStatuses()
+    form = "{:.2%}"
+    formS = "{:,.0f}"
+    for j in status:
+        print(
+            f"Lender: {j[0]}, Deposits: {formS.format(j[1]/1e18)} APR: {form.format(j[2]/1e18)}"
+        )
+    startingBalance = vault.totalAssets()
+    for i in range(2):
+
+        waitBlock = 25
+        # print(f'\n----wait {waitBlock} blocks----')
         chain.mine(waitBlock)
-
+        chain.sleep(waitBlock)
+        # print(f'\n----harvest----')
+        scrDai.mint(0,{"from": whale})
         strategy.harvest({"from": strategist})
-        #strat2.harvest({"from": gov})
-        chain.sleep(6 * 3600 + 1)  # to avoid sandwich protection
-        chain.mine(1)
 
-        action = random.randint(0, 9)
-        if action < 3:
-            percent = random.randint(50, 100)
+        # genericStateOfStrat(strategy, currency, vault)
+        # genericStateOfVault(vault, currency)
 
-            shareprice = vault.pricePerShare()
+        profit = (vault.totalAssets() - startingBalance) / 1e6
+        strState = vault.strategies(strategy)
+        totalReturns = strState[7]
+        totaleth = totalReturns / 1e6
+        # print(f'Real Profit: {profit:.5f}')
+        difff = profit - totaleth
+        # print(f'Diff: {difff}')
 
-            shares = vault.balanceOf(whale)
-            print("whale has:", shares)
-            sharesout = int(shares * percent / 100)
-            expectedout = sharesout * (shareprice / 1e18) * (10 ** (decimals * 2))
-
-            balanceBefore = currency.balanceOf(whale)
-            vault.withdraw(sharesout, {"from": whale})
-            chain.mine(waitBlock)
-            balanceAfter = currency.balanceOf(whale)
-
-            withdrawn = balanceAfter - balanceBefore
-            assert withdrawn > expectedout * 0.99 and withdrawn < expectedout * 1.01
-
-        elif action < 5:
-            print("whale deposits:")
-            depositAm = random.randint(10, 100) * (10 ** decimals)
-            vault.deposit(depositAm, {"from": whale})
-
-        status = strategy.lendStatuses()
-        form = "{:.2%}"
-        formS = "{:,.0f}"
-        for j in status:
-            print(
-                f"Lender: {j[0]}, Deposits: {formS.format(j[1]/1e18)}, APR: {form.format(j[2]/1e18)}"
-            )
-
-    # strategist withdraws
-    shareprice = vault.pricePerShare()
-
-    shares = vault.balanceOf(strategist)
-    expectedout = shares * (shareprice / 1e18) * (10 ** (decimals * 2))
-    balanceBefore = currency.balanceOf(strategist)
-
-    # genericStateOfStrat(strategy, currency, vault)
-    # genericStateOfVault(vault, currency)
-    vault.transferFrom(strategy, strategist, vault.balanceOf(strategy), {"from": strategist})
-    vault.withdraw(vault.balanceOf(strategist), {"from": strategist})
+        blocks_per_year = 3154 * 10**4
+        assert startingBalance != 0
+        time = (i + 1) * waitBlock
+        assert time != 0
+        apr = (totalReturns / startingBalance) * (blocks_per_year / time)
+        assert apr > 0 and apr < 1
+        # print(apr)
+        print(f"implied apr: {apr:.8%}")
 
     vault.withdraw(vault.balanceOf(whale), {"from": whale})
-    status = strategy.lendStatuses()
-    form = "{:.2%}"
-    formS = "{:,.0f}"
-    for j in status:
-        print(
-            f"Lender: {j[0]}, Deposits: {formS.format(j[1]/1e6)}, APR: {form.format(j[2]/1e18)}"
-        )
-    
-    balanceAfter = currency.balanceOf(strategist)
 
-    # genericStateOfStrat(strategy, currency, vault)
-    # genericStateOfVault(vault, currency)
-    status = strategy.lendStatuses()
-
-    chain.mine(waitBlock)
-    withdrawn = balanceAfter - balanceBefore
-    assert withdrawn > expectedout * 0.99 and withdrawn < expectedout * 1.01
-
-    profit = balanceAfter - starting_balance
-    assert profit > 0
-    print(profit)
+    vBal = vault.balanceOf(strategy)
+    assert vBal > 0
+    print(vBal)
+    vBefore = vault.balanceOf(strategist)
+    vault.transferFrom(strategy, strategist, vBal, {"from": strategist})
+    print(vault.balanceOf(strategist) - vBefore)
+    assert vault.balanceOf(strategist) - vBefore > 0
 
 
-def test_cream_up_down(
+def test_scream_up_down(
     usdt,
     Strategy,
     crUsdt,
@@ -265,106 +213,6 @@ def test_cream_up_down(
         )
 
 
-
-def test_apr_live_usdt(
-    dai,
-    interface,
-    samdev,
-    Contract,
-    crUsdt,
-    cUsdt,
-    aUsdt,
-    daddy,
-    vault,
-    currency,
-    GenericDyDx,
-    GenericCream,
-    strategy,
-    chain,
-    whale,
-    gov,
-    weth,
-    accounts,
-    rando,
-    fn_isolation
-):
-    gov = accounts.at(vault.governance(), force=True)
-    decimals = currency.decimals()
-    strategist = samdev
-    
-
-    form = "{:.2%}"
-    formS = "{:,.0f}"
-
-    #manualAll = [[dydxPlugin, 0], [creamPlugin, 1000]]
-    #strategy.manualAllocation(manualAll, {"from": strategist})
-    #print("new alloc")
-
-    status = strategy.lendStatuses()
-
-    for j in status:
-        print(
-            f"Lender: {j[0]}, Deposits: {formS.format(j[1]/1e18)}, APR: {form.format(j[2]/1e18)}"
-        )
-
-    #strategy.setDebtThreshold(1_000_000 *1e18, {'from': strategist})
-    #strategy.setProfitFactor(1000, {'from': strategist})
-
-    genericStateOfStrat(strategy, currency, vault)
-    genericStateOfVault(vault, currency)
-
-
-
-    #vault.setDepositLimit(300_000_000 *1e18, {"from": gov})
-    #vault.addStrategy(strategy, 100, 0, 1000, {"from": gov})
-    #strategy.addLender(creamP, {"from": gov})
-    #strategy.addLender(dydxP, {"from": gov})
-
-    #strategy.harvest({"from": strategist})
-    #lev_comp = "0x4031afd3B0F71Bace9181E554A9E680Ee4AbE7dF"
-    #alpha2 = "0x7D960F3313f3cB1BBB6BF67419d303597F3E2Fa8"
-    #ib_lev_comp = "0x77b7CD137Dd9d94e7056f78308D7F65D2Ce68910"
-    #gen_lender = "0x32b8C26d0439e1959CEa6262CBabC12320b384c4"
-    #vault.updateStrategyDebtRatio(lev_comp, 6_000, {"from": gov})
-    #vault.updateStrategyDebtRatio(alpha2, 2_000, {"from": gov})
-    #vault.updateStrategyDebtRatio(ib_lev_comp, 100, {"from": gov})
-    #vault.updateStrategyDebtRatio(gen_lender, 1_800, {"from": gov})
-
-
-    #assert vault.debtRatio() == 9_900
-    
-    #strategy.harvest({"from": strategist})
-
-    #manualAll = [[dydxPlugin, 700], [creamPlugin, 300]]
-    #strategy.manualAllocation(manualAll, {"from": strategist})
-    #print("new alloc")
-
-    #genericStateOfStrat(strategy, currency, vault)
-    #genericStateOfVault(vault, currency)
-
-    #form = "{:.2%}"
-    #formS = "{:,.0f}"
-
-    #status = strategy.lendStatuses()
-
-    #for j in status:
-    #    print(
-    #        f"Lender: {j[0]}, Deposits: {formS.format(j[1]/1e18)}, APR: {form.format(j[2]/1e18)}"
-    #    )
-    #chain.sleep(100)
-    #chain.mine(1)
-    
-
-    #vault.updateStrategyDebtRatio(strategy, 0, {'from': gov})
-    #strategy.harvest({"from": strategist})
-    #genericStateOfStrat(strategy, currency, vault)
-    #genericStateOfVault(vault, currency)
-    #status = strategy.lendStatuses()
-
-    #for j in status:
-    #    print(
-    #        f"Lender: {j[0]}, Deposits: {formS.format(j[1]/1e18)}, APR: {form.format(j[2]/1e18)}"
-    #    )
 
 
 def test_revoke_all(

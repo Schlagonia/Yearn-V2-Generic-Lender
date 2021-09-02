@@ -55,6 +55,7 @@ def vault(gov, rewards, guardian, ftm_dai, pm):
     Vault = pm(config["dependencies"][0]).Vault
     vault = Vault.deploy({"from": guardian})
     vault.initialize(ftm_dai, gov, rewards, "", "")
+    vault.setDepositLimit(2**256-1, {"from": gov})
 
     yield vault
 
@@ -73,6 +74,14 @@ def strategy(
     strategy.setKeeper(keeper)
 
     screamPlugin = strategist.deploy(GenericScream, strategy, "Scream", scrDai)
+    assert screamPlugin.underlyingBalanceStored() == 0
+    scapr = screamPlugin.compBlockShareInWant(0, False) * 3154 * 10**4 
+    print(scapr/1e18)
+    print((screamPlugin.apr() - scapr)/1e18)
+
+    scapr2 = screamPlugin.compBlockShareInWant(5_000_000 * 1e18, True) * 3154 * 10**4 
+    print(scapr2/1e18)
+    assert scapr2 < scapr
     strategy.addLender(screamPlugin, {"from": gov})
     assert strategy.numLenders() == 1
     yield strategy

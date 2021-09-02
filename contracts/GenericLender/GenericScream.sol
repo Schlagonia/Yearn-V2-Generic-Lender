@@ -26,13 +26,15 @@ contract GenericScream is GenericLenderBase {
     using Address for address;
     using SafeMath for uint256;
 
-    uint256 private constant blocksPerYear = 2_300_000;
+    uint256 private constant blocksPerYear = 3154 * 10**4;
     address public constant spookyRouter = address(0xF491e7B69E4244ad4002BC14e878a34207E38c29);
     address public constant scream = address(0xe0654C8e6fd4D733349ac7E09f6f23DA256bF475);
     address public constant wftm = address(0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83);
     address public constant unitroller = address(0x260E596DAbE3AFc463e75B6CC05d8c46aCAcFB09);
 
-    uint256 public minScreamToSell = 0.01 ether;
+    uint256 public dustThreshold;
+
+    uint256 public minScreamToSell = 0 ether;
 
     CErc20I public cToken;
 
@@ -53,6 +55,8 @@ contract GenericScream is GenericLenderBase {
         cToken = CErc20I(_cToken);
         require(cToken.underlying() == address(want), "WRONG CTOKEN");
         want.safeApprove(_cToken, uint256(-1));
+        IERC20(scream).safeApprove(spookyRouter, uint256(-1));
+        dustThreshold = 10_000;
     }
 
     function cloneCompoundLender(
@@ -68,13 +72,24 @@ contract GenericScream is GenericLenderBase {
         return _nav();
     }
 
+    //adjust dust threshol
+    function setDustThreshold(uint256 amount) external management {
+        dustThreshold = amount;
+    }
+
     function _nav() internal view returns (uint256) {
-        return want.balanceOf(address(this)).add(underlyingBalanceStored());
+        uint256 amount = want.balanceOf(address(this)).add(underlyingBalanceStored());
+
+        if(amount < dustThreshold){
+            return 0;
+        }else{
+            return amount;
+        }
     }
 
     function underlyingBalanceStored() public view returns (uint256 balance) {
         uint256 currentCr = cToken.balanceOf(address(this));
-        if (currentCr == 0) {
+        if (currentCr < dustThreshold) {
             balance = 0;
         } else {
             //The current exchange rate as an unsigned integer, scaled by 1e18.
@@ -87,7 +102,56 @@ contract GenericScream is GenericLenderBase {
     }
 
     function _apr() internal view returns (uint256) {
-        return cToken.supplyRatePerBlock().mul(blocksPerYear);
+        return (cToken.supplyRatePerBlock().add(compBlockShareInWant(0, false))).mul(blocksPerYear);
+    }
+
+    function compBlockShareInWant(uint256 change, bool add) public view returns (uint256){
+        //comp speed is amount to borrow or deposit (so half the total distribution for want)
+        uint256 distributionPerBlock = ComptrollerI(unitroller).compSpeeds(address(cToken));
+        
+        //convert to per dolla
+        uint256 totalSupply = cToken.totalSupply().mul(cToken.exchangeRateStored()).div(1e18);
+        if(add){
+            totalSupply = totalSupply.add(change);
+        }else{
+            totalSupply = totalSupply.sub(change);
+        }
+
+        uint256 blockShareSupply = 0;
+        if(totalSupply > 0){
+            blockShareSupply = distributionPerBlock.mul(1e18).div(totalSupply);
+        }
+
+        uint256 estimatedWant =  priceCheck(scream, address(want),blockShareSupply);
+        uint256 compRate;
+        if(estimatedWant != 0){
+            compRate = estimatedWant.mul(9).div(10); //10% pessimist
+
+        }
+
+        return(compRate);
+    }
+
+    //WARNING. manipulatable and simple routing. Only use for safe functions
+    function priceCheck(address start, address end, uint256 _amount) public view returns (uint256) {
+        if (_amount == 0) {
+            return 0;
+        }
+        address[] memory path;
+        if(start == wftm){
+            path = new address[](2);
+            path[0] = wftm;
+            path[1] = end;
+        }else{
+            path = new address[](3);
+            path[0] = start;
+            path[1] = wftm;
+            path[2] = end;
+        }
+
+        uint256[] memory amounts = IUniswapV2Router02(spookyRouter).getAmountsOut(_amount, path);
+
+        return amounts[amounts.length - 1];
     }
 
     function weightedApr() external view override returns (uint256) {
@@ -102,7 +166,7 @@ contract GenericScream is GenericLenderBase {
     //emergency withdraw. sends balance plus amount to governance
     function emergencyWithdraw(uint256 amount) external override management {
         //dont care about errors here. we want to exit what we can
-        cToken.redeemUnderlying(amount);
+        cToken.redeem(amount);
 
         want.safeTransfer(vault.governance(), want.balanceOf(address(this)));
     }
@@ -113,9 +177,19 @@ contract GenericScream is GenericLenderBase {
         uint256 looseBalance = want.balanceOf(address(this));
         uint256 total = balanceUnderlying.add(looseBalance);
 
-        if (amount > total) {
-            //cant withdraw more than we own
-            amount = total;
+        if (amount.add(dustThreshold) >= total) {
+            //cant withdraw more than we own. so withdraw all we can
+            if(balanceUnderlying > dustThreshold){
+                require(cToken.redeem(cToken.balanceOf(address(this))) == 0, "ctoken: redeemAll fail");
+            }
+            looseBalance = want.balanceOf(address(this));
+            if(looseBalance > 0 ){
+                want.safeTransfer(address(strategy), looseBalance);
+                return looseBalance;
+            }else{
+                return 0;
+            }
+            
         }
 
         if (looseBalance >= amount) {
@@ -129,13 +203,13 @@ contract GenericScream is GenericLenderBase {
         if (liquidity > 1) {
             uint256 toWithdraw = amount.sub(looseBalance);
 
-            if (toWithdraw <= liquidity) {
-                //we can take all
-                require(cToken.redeemUnderlying(toWithdraw) == 0, "ctoken: redeemUnderlying fail");
-            } else {
-                //take all we can
-                require(cToken.redeemUnderlying(liquidity) == 0, "ctoken: redeemUnderlying fail");
+            if (toWithdraw > liquidity) {
+                toWithdraw = liquidity;
             }
+            if(toWithdraw > dustThreshold){
+                require(cToken.redeemUnderlying(toWithdraw) == 0, "ctoken: redeemUnderlying fail");
+            }
+            
         }
         _disposeOfComp();
         looseBalance = want.balanceOf(address(this));
@@ -168,14 +242,48 @@ contract GenericScream is GenericLenderBase {
     }
 
     function withdrawAll() external override management returns (bool) {
-        uint256 invested = _nav();
-        uint256 returned = _withdraw(invested);
-        return returned >= invested;
+        uint256 liquidity = want.balanceOf(address(cToken));
+        uint256 liquidityInCTokens = convertFromUnderlying(liquidity);
+        uint256 amountInCtokens = cToken.balanceOf(address(this));
+
+        bool all;
+
+        if (liquidityInCTokens > 2) {
+            liquidityInCTokens = liquidityInCTokens-1;
+           
+            if (amountInCtokens <= liquidityInCTokens) {
+                //we can take all
+                all = true;
+                cToken.redeem(amountInCtokens);
+            } else {
+                //redo or else price changes
+                cToken.mint(0);
+                liquidityInCTokens = convertFromUnderlying(want.balanceOf(address(cToken)));
+                //take all we can
+                all = false;
+                cToken.redeem(liquidityInCTokens);
+            }
+        }
+        return all;
+
+        uint256 looseBalance = want.balanceOf(address(this));
+        if(looseBalance > 0){
+            want.safeTransfer(address(strategy), looseBalance);
+        }
+        
+    }
+
+    function convertFromUnderlying(uint256 amountOfUnderlying) public view returns (uint256 balance){
+        if (amountOfUnderlying == 0) {
+            balance = 0;
+        } else {
+            balance = amountOfUnderlying.mul(1e18).div(cToken.exchangeRateStored());
+        }
     }
 
     function hasAssets() external view override returns (bool) {
         //return cToken.balanceOf(address(this)) > 0;
-        return cToken.balanceOf(address(this)) > 0 || want.balanceOf(address(this)) > 0;
+        return cToken.balanceOf(address(this)) > dustThreshold || want.balanceOf(address(this)) > 0;
     }
 
     function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
@@ -191,6 +299,7 @@ contract GenericScream is GenericLenderBase {
 
         //the supply rate is derived from the borrow rate, reserve factor and the amount of total borrows.
         uint256 supplyRate = model.getSupplyRate(cashPrior.add(amount), borrows, reserves, reserverFactor);
+        supplyRate = supplyRate.add(compBlockShareInWant(amount, true));
 
         return supplyRate.mul(blocksPerYear);
     }
