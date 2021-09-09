@@ -137,7 +137,7 @@ contract GenericScream is GenericLenderBase {
         if (_amount == 0) {
             return 0;
         }
-        address[] memory path = getTokenOutPath(scream, address(want));
+        address[] memory path = getTokenOutPath(start, end);
         uint256[] memory amounts = IUniswapV2Router02(spookyRouter).getAmountsOut(_amount, path);
 
         return amounts[amounts.length - 1];
@@ -221,7 +221,7 @@ contract GenericScream is GenericLenderBase {
         }
     }
 
-    function getTokenOutPath(address _token_in, address _token_out) internal view returns (address[] memory _path) {
+    function getTokenOutPath(address _token_in, address _token_out) internal pure returns (address[] memory _path) {
         bool is_wftm = _token_in == address(wftm) || _token_out == address(wftm);
         _path = new address[](is_wftm ? 2 : 3);
         _path[0] = _token_in;
@@ -261,13 +261,8 @@ contract GenericScream is GenericLenderBase {
                 cToken.redeem(liquidityInCTokens);
             }
         }
+
         return all;
-
-        uint256 looseBalance = want.balanceOf(address(this));
-        if(looseBalance > 0){
-            want.safeTransfer(address(strategy), looseBalance);
-        }
-
     }
 
     function convertFromUnderlying(uint256 amountOfUnderlying) public view returns (uint256 balance){
