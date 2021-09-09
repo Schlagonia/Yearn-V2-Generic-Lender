@@ -1,24 +1,21 @@
 from itertools import count
 from brownie import Wei, reverts
 from useful_methods import genericStateOfVault, genericStateOfStrat
-import random
-import brownie
 
 def test_normal_activity(
-    ftm_dai,
-    scrDai,
+    wftm,
+    scrWftm,
     chain,
     whale,
-    rando,
     vault,
     strategy,
-    Contract,
     accounts,
     fn_isolation,
 ):
     strategist = accounts.at(strategy.strategist(), force=True)
     gov = accounts.at(vault.governance(), force=True)
-    currency = ftm_dai
+    currency = wftm
+
     starting_balance = currency.balanceOf(strategist)
 
     currency.approve(vault, 2 ** 256 - 1, {"from": whale})
@@ -32,7 +29,7 @@ def test_normal_activity(
     chain.sleep(10)
     chain.mine(1)
     strategy.setWithdrawalThreshold(0, {"from": gov})
-    #assert strategy.harvestTrigger(1 * 1e18) == True
+
     print(whale_deposit / 1e18)
     status = strategy.lendStatuses()
     form = "{:.2%}"
@@ -60,7 +57,7 @@ def test_normal_activity(
         chain.mine(waitBlock)
         chain.sleep(waitBlock)
         # print(f'\n----harvest----')
-        scrDai.mint(0,{"from": whale})
+        scrWftm.mint(0,{"from": whale})
         strategy.harvest({"from": strategist})
 
         # genericStateOfStrat(strategy, currency, vault)

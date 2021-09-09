@@ -2,18 +2,12 @@ import pytest
 from brownie import Wei, config, Contract
 
 @pytest.fixture
-def ftm_dai(interface):
-    #ftm dai!
-    yield interface.ERC20('0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E')
+def wftm():
+    yield Contract("0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83")
 
 @pytest.fixture
-def ftm_usdc(interface):
-    #ftm usdc
-    yield interface.ERC20('0x04068DA6C83AFCFA0e13ba15A6696662335D5B75')
-
-@pytest.fixture
-def scrDai(interface):
-    yield interface.CErc20I("0x8D9AED9882b4953a0c9fa920168fa1FDfA0eBE75")
+def scrWftm():
+    yield Contract("0x5AA53f03197E08C4851CAD8C92c7922DA5857E5d")
 
 @pytest.fixture
 def gov(accounts):
@@ -21,7 +15,7 @@ def gov(accounts):
 
 @pytest.fixture
 def whale(accounts):
-    yield accounts.at("0x96d66427C18e12Ec77B5bC195c9Bf1D6d01B204a", force=True)
+    yield accounts.at("0xBB634cafEf389cDD03bB276c82738726079FcF2E", force=True)
 
 @pytest.fixture
 def rewards(gov):
@@ -43,10 +37,10 @@ def keeper(accounts):
     yield accounts[4]
 
 @pytest.fixture
-def vault(gov, rewards, guardian, ftm_dai, pm):
+def vault(gov, rewards, guardian, wftm, pm):
     Vault = pm(config["dependencies"][0]).Vault
     vault = Vault.deploy({"from": guardian})
-    vault.initialize(ftm_dai, gov, rewards, "", "")
+    vault.initialize(wftm, gov, rewards, "", "")
     vault.setDepositLimit(2**256-1, {"from": gov})
 
     yield vault
@@ -56,15 +50,15 @@ def strategy(
     strategist,
     keeper,
     vault,
-    scrDai,
+    scrWftm,
     gov,
     Strategy,
-    GenericScream,
+    GenericScream
 ):
     strategy = strategist.deploy(Strategy, vault)
     strategy.setKeeper(keeper)
 
-    screamPlugin = strategist.deploy(GenericScream, strategy, "Scream", scrDai)
+    screamPlugin = strategist.deploy(GenericScream, strategy, "Scream", scrWftm)
     assert screamPlugin.underlyingBalanceStored() == 0
     scapr = screamPlugin.compBlockShareInWant(0, False) * 3154 * 10**4
     print(scapr/1e18)
