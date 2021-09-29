@@ -33,7 +33,7 @@ def test_manual_override(
     for j in status:
         plugin = interface.IGeneric(j[3])
 
-        with brownie.reverts("!management"):
+        with brownie.reverts("!gov"):
             plugin.emergencyWithdraw(1, {"from": rando})
         with brownie.reverts("!management"):
             plugin.withdrawAll({"from": rando})
@@ -63,7 +63,7 @@ def test_set_referral(
     vault.deposit(amount1, {"from": strategist})
     vault.deposit(amount2, {"from": whale})
     aave_lender = GenericAave.at(strategy.lenders(3))
-    aave_lender.setIsIncentivised(True, {'from': strategist}) # to increase APR 
+    aave_lender.setIsIncentivised(True, {'from': strategist}) # to increase APR
     aave_lender.setReferralCode(169, {'from': strategist})
 
     tx = strategy.harvest({"from": strategist})

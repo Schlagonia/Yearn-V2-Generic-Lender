@@ -239,6 +239,9 @@ contract GenericScream is GenericLenderBase {
     }
 
     function withdrawAll() external override management returns (bool) {
+        //redo or else price changes
+        cToken.mint(0);
+
         uint256 liquidity = want.balanceOf(address(cToken));
         uint256 liquidityInCTokens = convertFromUnderlying(liquidity);
         uint256 amountInCtokens = cToken.balanceOf(address(this));
@@ -253,8 +256,6 @@ contract GenericScream is GenericLenderBase {
                 all = true;
                 cToken.redeem(amountInCtokens);
             } else {
-                //redo or else price changes
-                cToken.mint(0);
                 liquidityInCTokens = convertFromUnderlying(want.balanceOf(address(cToken)));
                 //take all we can
                 all = false;
@@ -262,6 +263,7 @@ contract GenericScream is GenericLenderBase {
             }
         }
 
+        want.safeTransfer(address(strategy), want.balanceOf(address(this)));
         return all;
     }
 

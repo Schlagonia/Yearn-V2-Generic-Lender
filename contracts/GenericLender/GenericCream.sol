@@ -24,7 +24,7 @@ contract GenericCream is GenericLenderBase {
     using SafeMath for uint256;
 
     uint256 private constant blocksPerYear = 2_300_000;
-    uint256 public dustThreshold = 10_000;
+    uint256 public dustThreshold;
     CErc20I public cToken;
 
     constructor(
@@ -67,7 +67,7 @@ contract GenericCream is GenericLenderBase {
         }else{
             return amount;
         }
-        
+
     }
 
     function underlyingBalanceStored() public view returns (uint256 balance) {
@@ -150,7 +150,7 @@ contract GenericCream is GenericLenderBase {
                 toWithdraw = liquidity;
             }
             require(cToken.redeemUnderlying(toWithdraw) == 0, "ctoken: redeemUnderlying fail");
-            
+
         }
         looseBalance = want.balanceOf(address(this));
         want.safeTransfer(address(strategy), looseBalance);
@@ -166,14 +166,14 @@ contract GenericCream is GenericLenderBase {
     function withdrawAll() external override management returns (bool all) {
         //redo or else price changes
         cToken.mint(0);
-        
+
         uint256 liquidity = want.balanceOf(address(cToken));
         uint256 liquidityInCTokens = convertFromUnderlying(liquidity);
         uint256 amountInCtokens = cToken.balanceOf(address(this));
 
         if (liquidityInCTokens > 2) {
             liquidityInCTokens = liquidityInCTokens-1;
-           
+
             if (amountInCtokens <= liquidityInCTokens) {
                 //we can take all
                 all = true;
@@ -185,6 +185,8 @@ contract GenericCream is GenericLenderBase {
                 cToken.redeem(liquidityInCTokens);
             }
         }
+
+        want.safeTransfer(address(strategy), want.balanceOf(address(this)));
         return all;
     }
 

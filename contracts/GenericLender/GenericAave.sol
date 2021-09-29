@@ -96,7 +96,7 @@ contract GenericAave is GenericLenderBase {
     }
 
     //emergency withdraw. sends balance plus amount to governance
-    function emergencyWithdraw(uint256 amount) external override management {
+    function emergencyWithdraw(uint256 amount) external override onlyGovernance {
         _lendingPool().withdraw(address(want), amount, address(this));
 
         want.safeTransfer(vault.governance(), want.balanceOf(address(this)));
@@ -135,9 +135,9 @@ contract GenericAave is GenericLenderBase {
         return a.mul(_nav());
     }
 
-    // calculates APR from Liquidity Mining Program 
+    // calculates APR from Liquidity Mining Program
     function _incentivesRate(uint256 totalLiquidity) public view returns (uint256) {
-        // only returns != 0 if the incentives are in place at the moment. 
+        // only returns != 0 if the incentives are in place at the moment.
         // it will fail if the isIncentivised is set to true but there is no incentives
         if(isIncentivised && block.timestamp < _incentivesController().getDistributionEnd()) {
             uint256 _emissionsPerSecond;
@@ -145,7 +145,7 @@ contract GenericAave is GenericLenderBase {
             if(_emissionsPerSecond > 0) {
                 uint256 emissionsInWant = _AAVEtoWant(_emissionsPerSecond); // amount of emissions in want
 
-                uint256 incentivesRate = emissionsInWant.mul(SECONDS_IN_YEAR).mul(1e18).div(totalLiquidity); // APRs are in 1e18 
+                uint256 incentivesRate = emissionsInWant.mul(SECONDS_IN_YEAR).mul(1e18).div(totalLiquidity); // APRs are in 1e18
 
                 return incentivesRate.mul(9_500).div(10_000); // 95% of estimated APR to avoid overestimations
             }
@@ -196,8 +196,8 @@ contract GenericAave is GenericLenderBase {
         // sell AAVE for want
         uint256 aaveBalance = IERC20(AAVE).balanceOf(address(this));
         _sellAAVEForWant(aaveBalance);
-        
-        // deposit want in lending protocol 
+
+        // deposit want in lending protocol
         uint256 balance = want.balanceOf(address(this));
         if(balance > 0) {
             _deposit(balance);
@@ -236,7 +236,7 @@ contract GenericAave is GenericLenderBase {
     }
 
     function _apr() internal view returns (uint256) {
-        uint256 liquidityRate = uint256(_lendingPool().getReserveData(address(want)).currentLiquidityRate).div(1e9);// dividing by 1e9 to pass from ray to wad 
+        uint256 liquidityRate = uint256(_lendingPool().getReserveData(address(want)).currentLiquidityRate).div(1e9);// dividing by 1e9 to pass from ray to wad
         (uint256 availableLiquidity, uint256 totalStableDebt, uint256 totalVariableDebt, , , , , , , ) =
                     protocolDataProvider.getReserveData(address(want));
         uint256 incentivesRate = _incentivesRate(availableLiquidity.add(totalStableDebt).add(totalVariableDebt)); // total supplied liquidity in Aave v2
@@ -281,7 +281,7 @@ contract GenericAave is GenericLenderBase {
     function _deposit(uint256 amount) internal {
         ILendingPool lp = _lendingPool();
         // NOTE: check if allowance is enough and acts accordingly
-        // allowance might not be enough if 
+        // allowance might not be enough if
         //     i) initial allowance has been used (should take years)
         //     ii) lendingPool contract address has changed (Aave updated the contract address)
         if(want.allowance(address(this), address(lp)) < amount){
@@ -390,7 +390,7 @@ contract GenericAave is GenericLenderBase {
 
     modifier keepers() {
         require(
-            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
+            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).management(),
             "!keepers"
         );
         _;

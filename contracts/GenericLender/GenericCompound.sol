@@ -98,7 +98,7 @@ contract GenericCompound is GenericLenderBase {
     }
 
     //emergency withdraw. sends balance plus amount to governance
-    function emergencyWithdraw(uint256 amount) external override management {
+    function emergencyWithdraw(uint256 amount) external override onlyGovernance {
         //dont care about errors here. we want to exit what we can
         cToken.redeemUnderlying(amount);
 
