@@ -38,6 +38,8 @@ contract GenericScream is GenericLenderBase {
 
     CErc20I public cToken;
 
+    bool public claimComp;
+
     constructor(
         address _strategy,
         string memory name,
@@ -57,6 +59,7 @@ contract GenericScream is GenericLenderBase {
         want.safeApprove(_cToken, uint256(-1));
         IERC20(scream).safeApprove(spookyRouter, uint256(-1));
         dustThreshold = 10_000;
+        claimComp = true; // Claim comp is on by default
     }
 
     function cloneCompoundLender(
@@ -208,6 +211,11 @@ contract GenericScream is GenericLenderBase {
 
     function _disposeOfComp() internal {
 
+        // NO-OP if we shouldn't claim
+        if (! claimComp) {
+            return;
+        }
+
         CTokenI[] memory tokens = new CTokenI[](1);
         tokens[0] = cToken;
 
@@ -304,5 +312,9 @@ contract GenericScream is GenericLenderBase {
         protected[1] = address(cToken);
         protected[2] = scream;
         return protected;
+    }
+
+    function setClaimComp(bool _claimComp) external management {
+        claimComp = _claimComp;
     }
 }
