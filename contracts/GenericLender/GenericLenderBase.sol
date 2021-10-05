@@ -25,7 +25,7 @@ interface IBaseStrategy {
 
     function harvest() external;
 
-    function strategist() external view returns (address);
+    function management() external view returns (address);
 }
 
 abstract contract GenericLenderBase is IGenericLender {
@@ -88,12 +88,16 @@ abstract contract GenericLenderBase is IGenericLender {
 
     function protectedTokens() internal view virtual returns (address[] memory);
 
-    //make sure to use
     modifier management() {
         require(
-            msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
+            msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).management(),
             "!management"
         );
+        _;
+    }
+
+    modifier onlyGovernance() {
+        require(msg.sender == vault.governance(), "!gov");
         _;
     }
 }

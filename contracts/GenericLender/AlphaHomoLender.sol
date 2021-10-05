@@ -115,7 +115,7 @@ contract AlphaHomo is GenericLenderBase {
     }
 
     //emergency withdraw. sends balance plus amount to governance
-    function emergencyWithdraw(uint256 amount) external override management {
+    function emergencyWithdraw(uint256 amount) external override onlyGovernance {
         withdrawUnderlying(amount);
 
         want.safeTransfer(vault.governance(), want.balanceOf(address(this)));

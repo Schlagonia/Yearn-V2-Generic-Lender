@@ -79,7 +79,7 @@ contract EthCompound is GenericLenderBase {
     }
 
     //emergency withdraw. sends balance plus amount to governance
-    function emergencyWithdraw(uint256 amount) external override management {
+    function emergencyWithdraw(uint256 amount) external override onlyGovernance {
         crETH.redeemUnderlying(amount);
 
         //now turn to weth
