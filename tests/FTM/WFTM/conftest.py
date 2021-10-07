@@ -52,10 +52,10 @@ def strategy(
     vault,
     scrWftm,
     gov,
-    Strategy,
+    FtmStrategy,
     GenericScream
 ):
-    strategy = strategist.deploy(Strategy, vault)
+    strategy = strategist.deploy(FtmStrategy, vault)
     strategy.setKeeper(keeper)
 
     screamPlugin = strategist.deploy(GenericScream, strategy, "Scream", scrWftm)
