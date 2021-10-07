@@ -28,13 +28,13 @@ interface IUni {
  *
  ********************* */
 
-contract Strategy is BaseStrategy {
+contract FtmStrategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
-    address public constant uniswapRouter = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
-    address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address public constant uniswapRouter = 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
+    address public constant weth = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
     uint256 public withdrawalThreshold = 1e16;
     uint256 public constant SECONDSPERYEAR = 31556952;
 
@@ -70,7 +70,7 @@ contract Strategy is BaseStrategy {
             newStrategy := create(0, clone_code, 0x37)
         }
 
-        Strategy(newStrategy).initialize(_vault, _strategist, _rewards, _keeper);
+        FtmStrategy(newStrategy).initialize(_vault, _strategist, _rewards, _keeper);
 
         emit Cloned(newStrategy);
     }
