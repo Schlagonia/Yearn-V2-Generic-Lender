@@ -10,13 +10,48 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "../Interfaces/UniswapInterfaces/IUniswapV2Router02.sol";
 
 import "./GenericLenderBase.sol";
-import "../Interfaces/Aave/V3/IAToken.sol";
-import "../Interfaces/Aave/V3/IStakedAave.sol";
-import "../Interfaces/Aave/V3/IPool.sol";
-import "../Interfaces/Aave/V3/IProtocolDataProvider.sol";
+import {IAToken} from "../Interfaces/Aave/V3/IAToken.sol";
+import {IStakedAave} from "../Interfaces/Aave/V3/IStakedAave.sol";
+import {IPool} from "../Interfaces/Aave/V3/IPool.sol";
+import {IProtocolDataProvider} from "../Interfaces/Aave/V3/IProtocolDataProvider.sol";
 import {IRewardsController} from "../Interfaces/Aave/V3/IRewardsController.sol";
-import {IReserveInterestRateStrategy} from "../Interfaces/Aave//V3/IReserveInterestRateStrategy.sol";
-import "../Libraries/Aave/V3/DataTypesV3.sol";
+import {DataTypesV3} from "../Libraries/Aave/V3/DataTypesV3.sol";
+
+//-- IReserveInterestRateStrategy implemented manually to avoid compiler errors for aprAfterDeposit function --//
+/**
+ * @title IReserveInterestRateStrategy
+ * @author Aave
+ * @notice Interface for the calculation of the interest rates
+ */
+interface IReserveInterestRateStrategy {
+  /**
+   * @notice Returns the base variable borrow rate
+   * @return The base variable borrow rate, expressed in ray
+   **/
+  function getBaseVariableBorrowRate() external view returns (uint256);
+
+  /**
+   * @notice Returns the maximum variable borrow rate
+   * @return The maximum variable borrow rate, expressed in ray
+   **/
+  function getMaxVariableBorrowRate() external view returns (uint256);
+
+  /**
+   * @notice Calculates the interest rates depending on the reserve's state and configurations
+   * @param params The parameters needed to calculate interest rates
+   * @return liquidityRate The liquidity rate expressed in rays
+   * @return stableBorrowRate The stable borrow rate expressed in rays
+   * @return variableBorrowRate The variable borrow rate expressed in rays
+   **/
+  function calculateInterestRates(DataTypesV3.CalculateInterestRatesParams calldata params)
+    external
+    view
+    returns (
+      uint256,
+      uint256,
+      uint256
+    );
+}
 
 /********************
  *   A lender plugin for LenderYieldOptimiser for any erc20 asset on AaveV3
@@ -45,6 +80,7 @@ contract GenericAaveV3 is GenericLenderBase {
     uint16 internal constant DEFAULT_REFERRAL = 179; // jmonteer's referral code
     uint16 internal customReferral;
 
+    //These are currently set for Fantom WETH == WFTM
     address public constant WETH =
         address(0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83);
 
@@ -82,7 +118,7 @@ contract GenericAaveV3 is GenericLenderBase {
     // for the management to activate / deactivate incentives functionality
     function setIsIncentivised(bool _isIncentivised) external management {
         // NOTE: if the aToken is not incentivised, getIncentivesController() might revert (aToken won't implement it)
-        // to avoid calling it, we use the if else statement to update the rewadds variable
+        // to avoid calling it, we use the if else statement to update the rewards variables
         if(_isIncentivised) {
             address rewardController = address(aToken.getIncentivesController());
             require(rewardController != address(0), "!aToken does not have incentives controller set up");
@@ -170,7 +206,7 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function aprAfterDeposit(uint256 extraAmount) external view override returns (uint256) {
-        // i need to calculate new supplyRate after Deposit (when deposit has not been done yet)
+        //need to calculate new supplyRate after Deposit (when deposit has not been done yet)
         DataTypesV3.ReserveData memory reserveData = _lendingPool().getReserveData(address(want));
 
         (uint256 unbacked, , , uint256 totalStableDebt, uint256 totalVariableDebt, , , , uint256 averageStableBorrowRate, , , ) =
@@ -182,32 +218,19 @@ contract GenericAaveV3 is GenericLenderBase {
 
         (, , , , uint256 reserveFactor, , , , , ) = protocolDataProvider.getReserveConfigurationData(address(want));
 
-        /*
-        DataTypesV3.CalculateInterestRatesParams memory params = DataTypesV3.CalculateInterestRatesParams({
-            unbacked: unbacked,
-            liquidityAdded: extraAmount,
-            liquidityTaken: 0,
-            totalStableDebt: totalStableDebt,
-            totalVariableDebt: totalVariableDebt,
-            averageStableBorrowRate: averageStableBorrowRate,
-            reserveFactor: reserveFactor,
-            reserve: address(want),
-            aToken: address(aToken)
-        });
-        */
+        DataTypesV3.CalculateInterestRatesParams memory params = DataTypesV3.CalculateInterestRatesParams(
+            unbacked,
+            extraAmount,
+            0,
+            totalStableDebt,
+            totalVariableDebt,
+            averageStableBorrowRate,
+            reserveFactor,
+            address(want),
+            address(aToken)
+        );
 
-        (uint256 newLiquidityRate, , ) =
-            IReserveInterestRateStrategy(reserveData.interestRateStrategyAddress).calculateInterestRates(DataTypesV3.CalculateInterestRatesParams({
-            unbacked: unbacked,
-            liquidityAdded: extraAmount,
-            liquidityTaken: 0,
-            totalStableDebt: totalStableDebt,
-            totalVariableDebt: totalVariableDebt,
-            averageStableBorrowRate: averageStableBorrowRate,
-            reserveFactor: reserveFactor,
-            reserve: address(want),
-            aToken: address(aToken)
-        }));
+        (uint256 newLiquidityRate, , ) = IReserveInterestRateStrategy(reserveData.interestRateStrategyAddress).calculateInterestRates(params);
 
         uint256 incentivesRate = 0;
         uint256 i = 0;
@@ -239,8 +262,9 @@ contract GenericAaveV3 is GenericLenderBase {
             _incentivesController().claimAllRewardsToSelf(assets);
         
         //swap as much as possible back to want
+        address token;
         for(uint256 i = 0; i < rewardsList.length; i ++) {
-            address token = rewardsList[i];
+            token = rewardsList[i];
             if(token == address(stkAave)) {
                 harvestStkAave();
             } else {

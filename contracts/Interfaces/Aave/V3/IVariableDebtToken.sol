@@ -4,7 +4,7 @@ pragma solidity >=0.6.12;
 import {IScaledBalanceToken} from './IScaledBalanceToken.sol';
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IRewardsController} from './IRewardsController.sol';
-import {IPool} from './IPool.sol';
+//import {IPool} from './IPool.sol';
 
 
 /**
