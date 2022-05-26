@@ -233,7 +233,7 @@ contract GenericAaveV3 is GenericLenderBase {
         require(rewardTokens.length != 0, "No reward tokens");
 
         //claim all rewards
-        assets = new address[](1);
+        address[] memory assets;
         assets[0] = address(aToken);
         (address[] memory rewardsList, uint256[] memory claimedAmounts) = 
             _incentivesController().claimAllRewardsToSelf(assets);
@@ -276,7 +276,26 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function harvestTrigger(uint256 callcost) external view returns (bool) {
-        return _checkCooldown();
+        if(!isIncentivised) {
+            return false;
+        }
+
+        address[] memory assets; 
+        assets[0] = address(aToken);
+
+        //check the total rewards available
+        ( , uint256[] memory rewards) = 
+            _incentivesController().getAllUserRewards(assets, address(this));
+
+        // If we have a positive amount of any rewards return true
+        for(uint256 i = 0; i < rewards.length; i ++) {
+            if(rewards[i] > 0 ) {
+                return true;
+            }
+        }
+
+        //if we had no positive rewards return false
+        return false;
     }
 
     function _initialize(IAToken _aToken, bool _isIncentivised) internal {
