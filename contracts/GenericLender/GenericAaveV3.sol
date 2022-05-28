@@ -25,18 +25,6 @@ import {DataTypesV3} from "../Libraries/Aave/V3/DataTypesV3.sol";
  */
 interface IReserveInterestRateStrategy {
   /**
-   * @notice Returns the base variable borrow rate
-   * @return The base variable borrow rate, expressed in ray
-   **/
-  function getBaseVariableBorrowRate() external view returns (uint256);
-
-  /**
-   * @notice Returns the maximum variable borrow rate
-   * @return The maximum variable borrow rate, expressed in ray
-   **/
-  function getMaxVariableBorrowRate() external view returns (uint256);
-
-  /**
    * @notice Calculates the interest rates depending on the reserve's state and configurations
    * @param params The parameters needed to calculate interest rates
    * @return liquidityRate The liquidity rate expressed in rays
@@ -95,24 +83,38 @@ contract GenericAaveV3 is GenericLenderBase {
     constructor(
         address _strategy,
         string memory name,
-        IAToken _aToken,
         bool _isIncentivised
     ) public GenericLenderBase(_strategy, name) {
-        _initialize(_aToken, _isIncentivised);
+        _initialize(_isIncentivised);
     }
 
-    function initialize(IAToken _aToken, bool _isIncentivised) external {
-        _initialize(_aToken, _isIncentivised);
+    function initialize(bool _isIncentivised) external {
+        _initialize(_isIncentivised);
     }
 
     function cloneAaveLender(
         address _strategy,
         string memory _name,
-        IAToken _aToken,
         bool _isIncentivised
     ) external returns (address newLender) {
         newLender = _clone(_strategy, _name);
-        GenericAaveV3(newLender).initialize(_aToken, _isIncentivised);
+        GenericAaveV3(newLender).initialize(_isIncentivised);
+    }
+
+    function _initialize(bool _isIncentivised) internal {
+        require(address(aToken) == address(0), "GenericAave already initialized");
+
+        aToken = IAToken(_lendingPool().getReserveData(address(want)).aTokenAddress);
+
+        if(_isIncentivised) {
+            address rewardController = address(aToken.getIncentivesController());
+            require(rewardController != address(0), "!aToken does not have incentives controller set up");
+            rewardTokens = IRewardsController(rewardController).getRewardsByAsset(address(aToken));
+            numberOfRewardTokens = rewardTokens.length;
+        }
+        isIncentivised = _isIncentivised;
+
+        IERC20(address(want)).safeApprove(address(_lendingPool()), type(uint256).max);
     }
 
     // for the management to activate / deactivate incentives functionality
@@ -123,7 +125,7 @@ contract GenericAaveV3 is GenericLenderBase {
             address rewardController = address(aToken.getIncentivesController());
             require(rewardController != address(0), "!aToken does not have incentives controller set up");
 
-            rewardTokens = IRewardsController(rewardController).getRewardsByAsset(address(want));
+            rewardTokens = IRewardsController(rewardController).getRewardsByAsset(address(aToken));
             numberOfRewardTokens = rewardTokens.length;
 
         } else {
@@ -143,6 +145,11 @@ contract GenericAaveV3 is GenericLenderBase {
         keep3r = _keep3r;
     }
 
+    function deposit() external override management {
+        uint256 balance = want.balanceOf(address(this));
+        _deposit(balance);
+    }
+
     function withdraw(uint256 amount) external override management returns (uint256) {
         return _withdraw(amount);
     }
@@ -152,11 +159,6 @@ contract GenericAaveV3 is GenericLenderBase {
         _lendingPool().withdraw(address(want), amount, address(this));
 
         want.safeTransfer(vault.governance(), want.balanceOf(address(this)));
-    }
-
-    function deposit() external override management {
-        uint256 balance = want.balanceOf(address(this));
-        _deposit(balance);
     }
 
     function withdrawAll() external override management returns (bool) {
@@ -191,11 +193,16 @@ contract GenericAaveV3 is GenericLenderBase {
     function _incentivesRate(uint256 totalLiquidity, address rewardToken) public view returns (uint256) {
         // only returns != 0 if the incentives are in place at the moment.
         // it will fail if the isIncentivised is set to true but there is no incentives
-        if(isIncentivised && block.timestamp < _incentivesController().getDistributionEnd(address(want), rewardToken)) {
+        if(isIncentivised && block.timestamp < _incentivesController().getDistributionEnd(address(aToken), rewardToken)) {
             uint256 _emissionsPerSecond;
             (, _emissionsPerSecond, , ) = _incentivesController().getRewardsData(address(aToken), rewardToken);
             if(_emissionsPerSecond > 0) {
-                uint256 emissionsInWant = _checkPrice(rewardToken, address(want), _emissionsPerSecond); // amount of emissions in want
+                uint256 emissionsInWant;
+                if(rewardToken == address(want)) {
+                    emissionsInWant = _emissionsPerSecond;
+                } else {
+                    emissionsInWant = _checkPrice(rewardToken, address(want), _emissionsPerSecond); // amount of emissions in want
+                }
 
                 uint256 incentivesRate = emissionsInWant.mul(SECONDS_IN_YEAR).mul(1e18).div(totalLiquidity); // APRs are in 1e18
 
@@ -246,7 +253,7 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function hasAssets() external view override returns (bool) {
-        return aToken.balanceOf(address(this)) > 0;
+        return aToken.balanceOf(address(this)) > dust || want.balanceOf(address(this)) > 0;
     }
 
     // Only for incentivised aTokens
@@ -256,7 +263,7 @@ contract GenericAaveV3 is GenericLenderBase {
         require(rewardTokens.length != 0, "No reward tokens");
 
         //claim all rewards
-        address[] memory assets;
+        address[] memory assets = new address[](1);
         assets[0] = address(aToken);
         (address[] memory rewardsList, uint256[] memory claimedAmounts) = 
             _incentivesController().claimAllRewardsToSelf(assets);
@@ -265,8 +272,11 @@ contract GenericAaveV3 is GenericLenderBase {
         address token;
         for(uint256 i = 0; i < rewardsList.length; i ++) {
             token = rewardsList[i];
+
             if(token == address(stkAave)) {
                 harvestStkAave();
+            } else if(token == address(want)) {
+                continue;   
             } else {
                 _swapFrom(token, address(want), IERC20(token).balanceOf(address(this)));
             }
@@ -304,12 +314,13 @@ contract GenericAaveV3 is GenericLenderBase {
             return false;
         }
 
-        address[] memory assets; 
+        address[] memory assets = new address[](1);
         assets[0] = address(aToken);
 
         //check the total rewards available
-        ( , uint256[] memory rewards) = 
+        (address[] memory tokens, uint256[] memory rewards) = 
             _incentivesController().getAllUserRewards(assets, address(this));
+
 
         // If we have a positive amount of any rewards return true
         for(uint256 i = 0; i < rewards.length; i ++) {
@@ -317,25 +328,8 @@ contract GenericAaveV3 is GenericLenderBase {
                 return true;
             }
         }
-
         //if we had no positive rewards return false
-        return false;
-    }
-
-    function _initialize(IAToken _aToken, bool _isIncentivised) internal {
-        require(address(aToken) == address(0), "GenericAave already initialized");
-
-        if(_isIncentivised) {
-            address rewardController = address(_aToken.getIncentivesController());
-            require(rewardController != address(0), "!aToken does not have incentives controller set up");
-            rewardTokens = IRewardsController(rewardController).getRewardsByAsset(address(want));
-            numberOfRewardTokens = rewardTokens.length;
-        }
-        isIncentivised = _isIncentivised;
-
-        aToken = _aToken;
-        require(_lendingPool().getReserveData(address(want)).aTokenAddress == address(_aToken), "WRONG ATOKEN");
-        IERC20(address(want)).safeApprove(address(_lendingPool()), type(uint256).max);
+        return false; 
     }
 
     function _nav() internal view returns (uint256) {
@@ -421,10 +415,6 @@ contract GenericAaveV3 is GenericLenderBase {
         lp.supply(address(want), amount, address(this), referral);
     }
 
-    function _lendingPool() internal view returns (IPool lendingPool) {
-        lendingPool = IPool(protocolDataProvider.ADDRESSES_PROVIDER().getPool());
-    }
-
     function _checkCooldown() internal view returns (bool) {
         if(!isIncentivised) {
             return false;
@@ -484,6 +474,10 @@ contract GenericAaveV3 is GenericLenderBase {
             _path[1] = WETH;
             _path[2] = _tokenOut;
         }
+    }
+
+    function _lendingPool() internal view returns (IPool lendingPool) {
+        lendingPool = IPool(protocolDataProvider.ADDRESSES_PROVIDER().getPool());
     }
 
     function _incentivesController() internal view returns (IRewardsController) {

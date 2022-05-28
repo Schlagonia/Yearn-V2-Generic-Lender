@@ -54,4 +54,3 @@ $ brownie pm install OpenZeppelin/openzeppelin-contracts@3.1.0
 - Compile contracts with: `npm run compile`
 
 - Run tests with: `npm test`
-

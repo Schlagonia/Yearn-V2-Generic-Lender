@@ -4,7 +4,7 @@ from useful_methods import genericStateOfVault, genericStateOfStrat
 import random
 import brownie
 
-def test_aave_rewards(chain,
+def test_usdt_aave_rewards(chain,
     usdt,
     whale,
     gov,

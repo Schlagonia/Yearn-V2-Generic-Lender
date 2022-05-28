@@ -1,6 +1,6 @@
 from brownie import Wei
 
-def test_triggers(
+def test_wftm_triggers(
     wftm,
     scrWftm,
     chain,
