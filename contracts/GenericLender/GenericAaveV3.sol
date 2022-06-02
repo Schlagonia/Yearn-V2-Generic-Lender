@@ -65,7 +65,10 @@ contract GenericAaveV3 is GenericLenderBase {
     bool public isIncentivised;
     address[] public rewardTokens;
     uint256 public numberOfRewardTokens = 0;
-    uint16 internal constant DEFAULT_REFERRAL = 179; // jmonteer's referral code
+    // Used to assure we stop infinite while loops
+    //Should never be more reward tokens than 5
+    uint256 public maxLoops = 5;
+    uint16 internal constant DEFAULT_REFERRAL = 7; 
     uint16 internal customReferral;
 
     //These are currently set for Fantom WETH == WFTM
@@ -223,6 +226,8 @@ contract GenericAaveV3 is GenericLenderBase {
 
         uint256 newLiquidity = availableLiquidity.add(extraAmount);
 
+        uint256 totalLiquidity = newLiquidity.add(unbacked).add(totalStableDebt).add(totalVariableDebt);
+
         (, , , , uint256 reserveFactor, , , , , ) = protocolDataProvider.getReserveConfigurationData(address(want));
 
         DataTypesV3.CalculateInterestRatesParams memory params = DataTypesV3.CalculateInterestRatesParams(
@@ -242,8 +247,8 @@ contract GenericAaveV3 is GenericLenderBase {
         uint256 incentivesRate = 0;
         uint256 i = 0;
         //Passes the total Supply and the corresponding reward token address for each reward token the want has
-        while(i < numberOfRewardTokens) {
-            uint256 tokenIncentivesRate = _incentivesRate(newLiquidity.add(totalStableDebt).add(totalVariableDebt), rewardTokens[i]); 
+        while(i < numberOfRewardTokens && i < maxLoops) {
+            uint256 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
 
             incentivesRate += tokenIncentivesRate;
 
@@ -253,7 +258,7 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function hasAssets() external view override returns (bool) {
-        return aToken.balanceOf(address(this)) > dust || want.balanceOf(address(this)) > 0;
+        return aToken.balanceOf(address(this)) > dust || want.balanceOf(address(this)) > dust;
     }
 
     // Only for incentivised aTokens
@@ -321,15 +326,19 @@ contract GenericAaveV3 is GenericLenderBase {
         (address[] memory tokens, uint256[] memory rewards) = 
             _incentivesController().getAllUserRewards(assets, address(this));
 
-
+        uint256 expectedRewards = 0;
         // If we have a positive amount of any rewards return true
         for(uint256 i = 0; i < rewards.length; i ++) {
-            if(rewards[i] > 0 ) {
-                return true;
+
+            address token = tokens[i];
+            if(token == address(want)){
+                expectedRewards += rewards[i];
+            } else {
+                expectedRewards += _checkPrice(tokens[i], address(want), rewards[i]);
             }
         }
-        //if we had no positive rewards return false
-        return false; 
+        
+        return expectedRewards >= callcost;
     }
 
     function _nav() internal view returns (uint256) {
@@ -339,16 +348,19 @@ contract GenericAaveV3 is GenericLenderBase {
     function _apr() internal view returns (uint256) {
         uint256 liquidityRate = uint256(_lendingPool().getReserveData(address(want)).currentLiquidityRate).div(1e9);// dividing by 1e9 to pass from ray to wad
 
-        (, , , uint256 totalStableDebt, uint256 totalVariableDebt, , , , , , , ) =
+        (uint256 unbacked, , , uint256 totalStableDebt, uint256 totalVariableDebt, , , , , , , ) =
             protocolDataProvider.getReserveData(address(want));
 
         uint256 availableLiquidity = want.balanceOf(address(aToken));
 
+         uint256 totalLiquidity = availableLiquidity.add(unbacked).add(totalStableDebt).add(totalVariableDebt);
+
         uint256 incentivesRate = 0;
         uint256 i = 0;
         //Passes the total Supply and the corresponding reward token address for each reward token the want has
-        while(i < numberOfRewardTokens) {
-            uint256 tokenIncentivesRate = _incentivesRate(availableLiquidity.add(totalStableDebt).add(totalVariableDebt), rewardTokens[i]); 
+        while(i < numberOfRewardTokens && i < maxLoops) {
+           
+            uint256 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
 
             incentivesRate += tokenIncentivesRate;
 
