@@ -59,40 +59,53 @@ contract GenericAaveV3 is GenericLenderBase {
     
     //Only Applicable for Mainnet
     IStakedAave public constant stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
+    address public constant AAVE = address(0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9);
 
     address public keep3r;
 
     bool public isIncentivised;
+
     address[] public rewardTokens;
     uint256 public numberOfRewardTokens = 0;
     // Used to assure we stop infinite while loops
     //Should never be more reward tokens than 5
     uint256 public maxLoops = 5;
+
     uint16 internal constant DEFAULT_REFERRAL = 7; 
     uint16 internal customReferral;
 
-    //These are currently set for Fantom WETH == WFTM
-    address public constant WETH =
-        address(0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83);
+    /*
+        Chain specific addresses that will be set on Constructor
+    */
+    //Wrapped native token for chain i.e. WETH
+    address public WNATIVE;
 
-    address public constant AAVE =
-        address(0x6a07A792ab2965C72a5B8088d3a069A7aC3a993B);
-
-    IUniswapV2Router02 public constant router =
-        IUniswapV2Router02(address(0xF491e7B69E4244ad4002BC14e878a34207E38c29));
+    //Uni v2 router to be used
+    IUniswapV2Router02 public router;
 
     uint256 constant internal SECONDS_IN_YEAR = 365 days;
 
+    /// @param _strategy The strategy that will connect the lender to
+    /// @param _wNative The wrapped native token for chain. i.e. WETH/WFTM
+    /// @param _router Address of a UniV2 Router
+    /// @param name The name of the Strategy
+    /// @param _isIncentivised Bool repersenting wether or not the pool has reward tokens currently
     constructor(
         address _strategy,
+        address _wNative,
+        address _router,
         string memory name,
         bool _isIncentivised
     ) public GenericLenderBase(_strategy, name) {
-        _initialize(_isIncentivised);
+        _initialize(_wNative, _router, _isIncentivised);
     }
 
-    function initialize(bool _isIncentivised) external {
-        _initialize(_isIncentivised);
+    function initialize(
+        address _wNative,
+        address _router,
+        bool _isIncentivised
+    ) external {
+        _initialize(_wNative, _router, _isIncentivised);
     }
 
     function cloneAaveLender(
@@ -101,10 +114,10 @@ contract GenericAaveV3 is GenericLenderBase {
         bool _isIncentivised
     ) external returns (address newLender) {
         newLender = _clone(_strategy, _name);
-        GenericAaveV3(newLender).initialize(_isIncentivised);
+        GenericAaveV3(newLender).initialize(WNATIVE, address(router), _isIncentivised);
     }
 
-    function _initialize(bool _isIncentivised) internal {
+    function _initialize(address _wNative, address _router, bool _isIncentivised) internal {
         require(address(aToken) == address(0), "GenericAave already initialized");
 
         aToken = IAToken(_lendingPool().getReserveData(address(want)).aTokenAddress);
@@ -118,6 +131,10 @@ contract GenericAaveV3 is GenericLenderBase {
         isIncentivised = _isIncentivised;
 
         IERC20(address(want)).safeApprove(address(_lendingPool()), type(uint256).max);
+
+        //Set Chain Specific Addresses
+        WNATIVE = _wNative;
+        router = IUniswapV2Router02(_router);
     }
 
     // for the management to activate / deactivate incentives functionality
@@ -476,14 +493,14 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (address[] memory _path) {
-        bool isWeth = _tokenIn == WETH || _tokenOut == WETH;
-        _path = new address[](isWeth ? 2 : 3);
+        bool isNative = _tokenIn == WNATIVE || _tokenOut == WNATIVE;
+        _path = new address[](isNative ? 2 : 3);
         _path[0] = _tokenIn;
 
-        if (isWeth) {
+        if (isNative) {
             _path[1] = _tokenOut;
         } else {
-            _path[1] = WETH;
+            _path[1] = WNATIVE;
             _path[2] = _tokenOut;
         }
     }

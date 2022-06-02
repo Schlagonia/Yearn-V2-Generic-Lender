@@ -4,25 +4,29 @@ import brownie
 
 from brownie import Wei, GenericAaveV3
 
-def test_deploy(strategist, strategy, GenericAaveV3, wftm, aWftm, lendingPool):
+def test_deploy(strategist, strategy, GenericAaveV3, wftm, aWftm, lendingPool, router):
     incentivize = False
 
-    v3Plugin = strategist.deploy(GenericAaveV3, strategy, "AaveV3", incentivize)
+    v3Plugin = strategist.deploy(GenericAaveV3, strategy, wftm.address, router, "AaveV3", incentivize)
 
     incentivized = v3Plugin.isIncentivised()
     numberOfRewardTokens = v3Plugin.numberOfRewardTokens()
     aToken = v3Plugin.aToken()
     allowance = wftm.allowance(v3Plugin.address, lendingPool)
+    native = v3Plugin.WNATIVE()
+    _router = v3Plugin.router()
 
     assert incentivized == incentivize
     assert numberOfRewardTokens == 0
+    assert native == wftm.address
+    assert _router == router
     assert aToken == aWftm
     assert allowance == 2**256-1
 
-def test_deploy_incentivized(strategist, strategy, GenericAaveV3, wftm, aWftm, lendingPool):
+def test_deploy_incentivized(strategist, strategy, GenericAaveV3, wftm, aWftm, router, lendingPool):
     incentivize = True
 
-    v3Plugin = strategist.deploy(GenericAaveV3, strategy, "AaveV3", incentivize)
+    v3Plugin = strategist.deploy(GenericAaveV3, strategy, wftm.address, router, "AaveV3", incentivize)
 
     incentivized = v3Plugin.isIncentivised()
     numberOfRewardTokens = v3Plugin.numberOfRewardTokens()
@@ -47,7 +51,9 @@ def test_adding_plugIn(
     assert v3Plugin.vault() == v3Plugin.vault()
 
 def test_reinitialize(
-    v3Plugin
+    v3Plugin,
+    wftm,
+    router
 ):
     with brownie.reverts():
-        v3Plugin.initialize(False)
+        v3Plugin.initialize(wftm.address, router, False)

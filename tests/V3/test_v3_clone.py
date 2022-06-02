@@ -6,7 +6,9 @@ from brownie import Wei
 def test_v3_clone(
     v3Plugin,
     GenericAaveV3,
-    strategy
+    strategy,
+    wftm,
+    router
 ):
     
     tx = v3Plugin.cloneAaveLender(strategy, v3Plugin.lenderName(), v3Plugin.isIncentivised())
@@ -17,16 +19,20 @@ def test_v3_clone(
     assert v3Plugin.isIncentivised() == new_plugin.isIncentivised()
     assert  v3Plugin.numberOfRewardTokens() ==  new_plugin.numberOfRewardTokens()
     assert v3Plugin.aToken() == new_plugin.aToken()
+    assert v3Plugin.WNATIVE() == wftm.address
+    assert v3Plugin.router() == router
     
 
 def test_double_initialize(
     v3Plugin,
     GenericAaveV3,
     strategy,
-    strategist
+    strategist,
+    wftm,
+    router
 ):
     tx = v3Plugin.cloneAaveLender(strategy, v3Plugin.lenderName(), v3Plugin.isIncentivised())
     new_plugin = GenericAaveV3.at(tx.return_value)
 
     with brownie.reverts():
-        new_plugin.initialize(True, {"from":strategist})
+        new_plugin.initialize(wftm.address, router, True, {"from":strategist})

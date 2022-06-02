@@ -14,6 +14,10 @@ def lendingPool():
     yield '0x794a61358D6845594F94dc1DB02A252b5b4814aD'
 
 @pytest.fixture
+def router():
+    yield '0xF491e7B69E4244ad4002BC14e878a34207E38c29'
+
+@pytest.fixture
 def gov(accounts):
     yield accounts[3]
 
@@ -83,9 +87,19 @@ def strategy(
 def v3Plugin(
     strategist,
     GenericAaveV3,
-    strategy
+    strategy,
+    wftm,
+    router
 ):
-    v3Plugin = strategist.deploy(GenericAaveV3, strategy, "AaveV3", False)
+    v3Plugin = strategist.deploy(
+        GenericAaveV3, 
+        strategy, 
+        wftm.address, 
+        router, 
+        "AaveV3", 
+        False
+    )
+
     assert v3Plugin.underlyingBalanceStored() == 0
     apr = v3Plugin.apr()
     assert apr > 0
