@@ -57,16 +57,14 @@ contract GenericAaveV3 is GenericLenderBase {
     IProtocolDataProvider public constant protocolDataProvider = IProtocolDataProvider(address(0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654));
     IAToken public aToken;
     
-    //Only Applicable for Mainnet
-    IStakedAave public constant stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
-    address public constant AAVE = address(0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9);
+    //Only Applicable for Mainnet, We leave then since they wont be called on any other chain
+    IStakedAave private constant stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
+    address private constant AAVE = address(0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9);
 
     address public keep3r;
 
     bool public isIncentivised;
 
-    address[] public rewardTokens;
-    uint256 public numberOfRewardTokens = 0;
     // Used to assure we stop infinite while loops
     //Should never be more reward tokens than 5
     uint256 public maxLoops = 5;
@@ -74,12 +72,11 @@ contract GenericAaveV3 is GenericLenderBase {
     uint16 internal constant DEFAULT_REFERRAL = 7; 
     uint16 internal customReferral;
 
-    /*
-        Chain specific addresses that will be set on Constructor
-    */
+    /*** 
+    Chain specific addresses that will be set on Constructor
+    ***/
     //Wrapped native token for chain i.e. WETH
     address public WNATIVE;
-
     //Uni v2 router to be used
     IUniswapV2Router02 public router;
 
@@ -125,8 +122,6 @@ contract GenericAaveV3 is GenericLenderBase {
         if(_isIncentivised) {
             address rewardController = address(aToken.getIncentivesController());
             require(rewardController != address(0), "!aToken does not have incentives controller set up");
-            rewardTokens = IRewardsController(rewardController).getRewardsByAsset(address(aToken));
-            numberOfRewardTokens = rewardTokens.length;
         }
         isIncentivised = _isIncentivised;
 
@@ -140,19 +135,11 @@ contract GenericAaveV3 is GenericLenderBase {
     // for the management to activate / deactivate incentives functionality
     function setIsIncentivised(bool _isIncentivised) external management {
         // NOTE: if the aToken is not incentivised, getIncentivesController() might revert (aToken won't implement it)
-        // to avoid calling it, we use the if else statement to update the rewards variables
+        // to avoid calling it, we use the if else statement to check for valid address
         if(_isIncentivised) {
             address rewardController = address(aToken.getIncentivesController());
             require(rewardController != address(0), "!aToken does not have incentives controller set up");
-
-            rewardTokens = IRewardsController(rewardController).getRewardsByAsset(address(aToken));
-            numberOfRewardTokens = rewardTokens.length;
-
-        } else {
-            delete rewardTokens;
-            numberOfRewardTokens = 0;
-        }
-
+        } 
         isIncentivised = _isIncentivised;
     }
 
@@ -212,7 +199,9 @@ contract GenericAaveV3 is GenericLenderBase {
     // calculates APR from Liquidity Mining Program
     function _incentivesRate(uint256 totalLiquidity, address rewardToken) public view returns (uint256) {
         // only returns != 0 if the incentives are in place at the moment.
-        // it will fail if the isIncentivised is set to true but there is no incentives
+        // Return 0 incase an improper address is sent so the whole tx doesnt fail
+        if(rewardToken == address(0)) return 0;
+
         if(isIncentivised && block.timestamp < _incentivesController().getDistributionEnd(address(aToken), rewardToken)) {
             uint256 _emissionsPerSecond;
             (, _emissionsPerSecond, , ) = _incentivesController().getRewardsData(address(aToken), rewardToken);
@@ -262,15 +251,20 @@ contract GenericAaveV3 is GenericLenderBase {
         (uint256 newLiquidityRate, , ) = IReserveInterestRateStrategy(reserveData.interestRateStrategyAddress).calculateInterestRates(params);
 
         uint256 incentivesRate = 0;
-        uint256 i = 0;
-        //Passes the total Supply and the corresponding reward token address for each reward token the want has
-        while(i < numberOfRewardTokens && i < maxLoops) {
-            uint256 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
+        if(isIncentivised) {
 
-            incentivesRate += tokenIncentivesRate;
+            address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
+            uint256 i = 0;
+            //Passes the total Supply and the corresponding reward token address for each reward token the want has
+            while(i < rewardTokens.length && i < maxLoops) {
+                uint256 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
 
-            i ++;
+                incentivesRate += tokenIncentivesRate;
+
+                i ++;
+            }
         }
+
         return newLiquidityRate.div(1e9).add(incentivesRate); // divided by 1e9 to go from Ray to Wad
     }
 
@@ -280,9 +274,9 @@ contract GenericAaveV3 is GenericLenderBase {
 
     // Only for incentivised aTokens
     // this is a manual trigger to claim rewards
-    // only callable if the token is incentivised by Aave Governance (rewardsTokens !=0)
+    // only callable if the token is incentivised by Aave Governance
     function harvest() external keepers{
-        require(rewardTokens.length != 0, "No reward tokens");
+        require(isIncentivised, "Not incevtivised, Nothing to harvest");
 
         //claim all rewards
         address[] memory assets = new address[](1);
@@ -370,18 +364,22 @@ contract GenericAaveV3 is GenericLenderBase {
 
         uint256 availableLiquidity = want.balanceOf(address(aToken));
 
-         uint256 totalLiquidity = availableLiquidity.add(unbacked).add(totalStableDebt).add(totalVariableDebt);
+        uint256 totalLiquidity = availableLiquidity.add(unbacked).add(totalStableDebt).add(totalVariableDebt);
 
         uint256 incentivesRate = 0;
-        uint256 i = 0;
-        //Passes the total Supply and the corresponding reward token address for each reward token the want has
-        while(i < numberOfRewardTokens && i < maxLoops) {
+        if(isIncentivised) {
+
+            address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
+            uint256 i = 0;
+            //Passes the total Supply and the corresponding reward token address for each reward token the want has
+            while(i < rewardTokens.length && i < maxLoops) {
            
-            uint256 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
+                uint256 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
 
-            incentivesRate += tokenIncentivesRate;
+                incentivesRate += tokenIncentivesRate;
 
-            i ++;
+                i ++;
+            }
         }
 
         return liquidityRate.add(incentivesRate);
@@ -389,7 +387,7 @@ contract GenericAaveV3 is GenericLenderBase {
 
     //withdraw an amount including any want balance
     function _withdraw(uint256 amount) internal returns (uint256) {
-        uint256 balanceUnderlying = aToken.balanceOf(address(this));
+        uint256 balanceUnderlying = underlyingBalanceStored();
         uint256 looseBalance = want.balanceOf(address(this));
         uint256 total = balanceUnderlying.add(looseBalance);
 
@@ -406,7 +404,7 @@ contract GenericAaveV3 is GenericLenderBase {
         //not state changing but OK because of previous call
         uint256 liquidity = want.balanceOf(address(aToken));
 
-        if (liquidity > 1) {
+        if (liquidity > dust) {
             uint256 toWithdraw = amount.sub(looseBalance);
 
             if (toWithdraw <= liquidity) {

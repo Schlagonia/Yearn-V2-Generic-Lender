@@ -17,7 +17,6 @@ def test_v3_clone(
     assert v3Plugin.want() == new_plugin.want()
     assert v3Plugin.lenderName() == new_plugin.lenderName()
     assert v3Plugin.isIncentivised() == new_plugin.isIncentivised()
-    assert  v3Plugin.numberOfRewardTokens() ==  new_plugin.numberOfRewardTokens()
     assert v3Plugin.aToken() == new_plugin.aToken()
     assert v3Plugin.WNATIVE() == wftm.address
     assert v3Plugin.router() == router

@@ -8,9 +8,7 @@ def test_setup(
     wavax
 ):
 
-    numberOfRewardTokens  = v3Plugin.numberOfRewardTokens()
     assert v3Plugin.isIncentivised() == True
-    assert numberOfRewardTokens == 1
     
     trigger = v3Plugin.harvestTrigger(100)
     assert trigger == False
@@ -98,6 +96,7 @@ def test_harvest_usdc(
     with brownie.reverts():
         v3Plugin.harvest({"from":rando})
 
+    assert wavax.balanceOf(v3Plugin.address) == 0
     aBal = v3Plugin.underlyingBalanceStored()
     v3Plugin.harvest({"from":gov})
     #make sure the harvested was collected sold and reinvested 

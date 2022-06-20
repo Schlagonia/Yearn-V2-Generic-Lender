@@ -10,14 +10,12 @@ def test_deploy(strategist, strategy, GenericAaveV3, wftm, aWftm, lendingPool, r
     v3Plugin = strategist.deploy(GenericAaveV3, strategy, wftm.address, router, "AaveV3", incentivize)
 
     incentivized = v3Plugin.isIncentivised()
-    numberOfRewardTokens = v3Plugin.numberOfRewardTokens()
     aToken = v3Plugin.aToken()
     allowance = wftm.allowance(v3Plugin.address, lendingPool)
     native = v3Plugin.WNATIVE()
     _router = v3Plugin.router()
 
     assert incentivized == incentivize
-    assert numberOfRewardTokens == 0
     assert native == wftm.address
     assert _router == router
     assert aToken == aWftm
@@ -29,13 +27,10 @@ def test_deploy_incentivized(strategist, strategy, GenericAaveV3, wftm, aWftm, r
     v3Plugin = strategist.deploy(GenericAaveV3, strategy, wftm.address, router, "AaveV3", incentivize)
 
     incentivized = v3Plugin.isIncentivised()
-    numberOfRewardTokens = v3Plugin.numberOfRewardTokens()
     aToken = v3Plugin.aToken()
     allowance = wftm.allowance(v3Plugin.address, lendingPool)
 
     assert incentivized == incentivize
-    # Will still have no reward tokens even if we set it to incentivized with current Aave set up
-    assert numberOfRewardTokens == 0
     assert aToken == aWftm
     assert allowance == 2**256-1
 
