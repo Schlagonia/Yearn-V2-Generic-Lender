@@ -8,10 +8,11 @@ def test_v3_clone(
     GenericAaveV3,
     strategy,
     wftm,
-    router
+    router,
+    router2
 ):
     
-    tx = v3Plugin.cloneAaveLender(strategy, v3Plugin.lenderName(), v3Plugin.isIncentivised())
+    tx = v3Plugin.cloneAaveLender(strategy, router, router2, v3Plugin.lenderName(), v3Plugin.isIncentivised())
     new_plugin = GenericAaveV3.at(tx.return_value)
 
     assert v3Plugin.want() == new_plugin.want()
@@ -28,10 +29,11 @@ def test_double_initialize(
     strategy,
     strategist,
     wftm,
-    router
+    router,
+    router2
 ):
-    tx = v3Plugin.cloneAaveLender(strategy, v3Plugin.lenderName(), v3Plugin.isIncentivised())
+    tx = v3Plugin.cloneAaveLender(strategy, router, router2, v3Plugin.lenderName(), v3Plugin.isIncentivised())
     new_plugin = GenericAaveV3.at(tx.return_value)
 
     with brownie.reverts():
-        new_plugin.initialize(wftm.address, router, True, {"from":strategist})
+        new_plugin.initialize(wftm.address, router, router2, True, {"from":strategist})

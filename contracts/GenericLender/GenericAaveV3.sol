@@ -77,6 +77,8 @@ contract GenericAaveV3 is GenericLenderBase {
     ***/
     //Wrapped native token for chain i.e. WETH
     address public WNATIVE;
+    address public baseRouter;
+    address public secondRouter;
     //Uni v2 router to be used
     IUniswapV2Router02 public router;
 
@@ -84,37 +86,47 @@ contract GenericAaveV3 is GenericLenderBase {
 
     /// @param _strategy The strategy that will connect the lender to
     /// @param _wNative The wrapped native token for chain. i.e. WETH/WFTM
-    /// @param _router Address of a UniV2 Router
+    /// @param _baseRouter Address of a UniV2 Router to be used
+    /// @param _secondRouter Address of the second router to be used as a backup
     /// @param name The name of the Strategy
     /// @param _isIncentivised Bool repersenting wether or not the pool has reward tokens currently
     constructor(
         address _strategy,
         address _wNative,
-        address _router,
+        address _baseRouter,
+        address _secondRouter,
         string memory name,
         bool _isIncentivised
     ) public GenericLenderBase(_strategy, name) {
-        _initialize(_wNative, _router, _isIncentivised);
+        _initialize(_wNative, _baseRouter, _secondRouter, _isIncentivised);
     }
 
     function initialize(
         address _wNative,
-        address _router,
+        address _baseRouter,
+        address _secondRouter,
         bool _isIncentivised
     ) external {
-        _initialize(_wNative, _router, _isIncentivised);
+        _initialize(_wNative, _baseRouter, _secondRouter, _isIncentivised);
     }
 
     function cloneAaveLender(
         address _strategy,
+        address _baseRouter,
+        address _secondRouter,
         string memory _name,
         bool _isIncentivised
     ) external returns (address newLender) {
         newLender = _clone(_strategy, _name);
-        GenericAaveV3(newLender).initialize(WNATIVE, address(router), _isIncentivised);
+        GenericAaveV3(newLender).initialize(WNATIVE, _baseRouter, _secondRouter, _isIncentivised);
     }
 
-    function _initialize(address _wNative, address _router, bool _isIncentivised) internal {
+    function _initialize(
+        address _wNative, 
+        address _baseRouter, 
+        address _secondRouter, 
+        bool _isIncentivised
+    ) internal {
         require(address(aToken) == address(0), "GenericAave already initialized");
 
         aToken = IAToken(_lendingPool().getReserveData(address(want)).aTokenAddress);
@@ -129,7 +141,9 @@ contract GenericAaveV3 is GenericLenderBase {
 
         //Set Chain Specific Addresses
         WNATIVE = _wNative;
-        router = IUniswapV2Router02(_router);
+        baseRouter = _baseRouter;
+        secondRouter = _secondRouter;
+        router = IUniswapV2Router02(_baseRouter);
     }
 
     // for the management to activate / deactivate incentives functionality
@@ -141,6 +155,12 @@ contract GenericAaveV3 is GenericLenderBase {
             require(rewardController != address(0), "!aToken does not have incentives controller set up");
         } 
         isIncentivised = _isIncentivised;
+    }
+
+    function changeRouter() external management {
+        address currentRouter = address(router);
+
+        router = currentRouter == baseRouter ? IUniswapV2Router02(secondRouter) : IUniswapV2Router02(baseRouter);
     }
 
     function setReferralCode(uint16 _customReferral) external management {

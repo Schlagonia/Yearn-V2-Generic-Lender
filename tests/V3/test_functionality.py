@@ -55,3 +55,18 @@ def test_set_keeper(
     with brownie.reverts():
         v3Plugin.setKeep3r(keeper, {"from": rando})
 
+
+def test_change_router(
+    v3Plugin,
+    gov,
+    rando,
+    router,
+    router2
+):
+    assert v3Plugin.router() == router
+    v3Plugin.changeRouter({"from": gov})
+
+    assert v3Plugin.router() == router2
+
+    with brownie.reverts():
+        v3Plugin.changeRouter({"from": rando})

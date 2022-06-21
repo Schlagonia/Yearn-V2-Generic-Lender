@@ -18,6 +18,10 @@ def router():
     yield '0xF491e7B69E4244ad4002BC14e878a34207E38c29'
 
 @pytest.fixture
+def router2(accounts):
+    yield accounts[7]
+
+@pytest.fixture
 def gov(accounts):
     yield accounts[3]
 
@@ -89,13 +93,15 @@ def v3Plugin(
     GenericAaveV3,
     strategy,
     wftm,
-    router
+    router,
+    router2
 ):
     v3Plugin = strategist.deploy(
         GenericAaveV3, 
         strategy, 
         wftm.address, 
-        router, 
+        router,
+        router2, 
         "AaveV3", 
         False
     )

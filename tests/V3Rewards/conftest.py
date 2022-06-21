@@ -1,3 +1,4 @@
+import py
 import pytest
 from brownie import Wei, config, Contract
 
@@ -20,6 +21,10 @@ def lendingPool():
 @pytest.fixture
 def router():
     yield '0x60aE616a2155Ee3d9A68541Ba4544862310933d4'
+
+@pytest.fixture
+def router2(accounts):
+    yield accounts[7]
 
 @pytest.fixture
 def gov(accounts):
@@ -109,13 +114,15 @@ def v3Plugin(
     GenericAaveV3,
     strategy,
     wavax,
-    router
+    router,
+    router2
 ):
     v3Plugin = strategist.deploy(
         GenericAaveV3, 
         strategy,
         wavax.address,
         router, 
+        router2,
         "AaveV3", 
         True
     )
@@ -136,13 +143,15 @@ def v3PluginUsdc(
     GenericAaveV3,
     strategyUsdc,
     wavax,
-    router
+    router,
+    router2
 ):
     v3PluginUsdc = strategist.deploy(
         GenericAaveV3, 
         strategyUsdc,
         wavax.address,
         router, 
+        router2,
         "AaveV3", 
         True
     )
