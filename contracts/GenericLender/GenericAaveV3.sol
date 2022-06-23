@@ -229,6 +229,8 @@ contract GenericAaveV3 is GenericLenderBase {
                 uint256 emissionsInWant;
                 if(rewardToken == address(want)) {
                     emissionsInWant = _emissionsPerSecond;
+                } else if(rewardToken == address(stkAave)){
+                    emissionsInWant = _checkPrice(AAVE, address(want), _emissionsPerSecond);
                 } else {
                     emissionsInWant = _checkPrice(rewardToken, address(want), _emissionsPerSecond); // amount of emissions in want
                 }
@@ -275,9 +277,11 @@ contract GenericAaveV3 is GenericLenderBase {
 
             address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
             uint256 i = 0;
+            uint256 _maxLoops = maxLoops;
+            uint256 tokenIncentivesRate;
             //Passes the total Supply and the corresponding reward token address for each reward token the want has
-            while(i < rewardTokens.length && i < maxLoops) {
-                uint256 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
+            while(i < rewardTokens.length && i < _maxLoops) {
+                tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
 
                 incentivesRate += tokenIncentivesRate;
 
@@ -297,6 +301,9 @@ contract GenericAaveV3 is GenericLenderBase {
     // only callable if the token is incentivised by Aave Governance
     function harvest() external keepers{
         require(isIncentivised, "Not incevtivised, Nothing to harvest");
+
+        //Need to redeem and aave from StkAave if applicable before claiming rewards and staring cool down over
+        redeemAave();
 
         //claim all rewards
         address[] memory assets = new address[](1);
@@ -325,7 +332,7 @@ contract GenericAaveV3 is GenericLenderBase {
         }
     }
 
-    function harvestStkAave() internal {
+    function redeemAave() internal {
         if(!_checkCooldown()) {
             return;
         }
@@ -336,9 +343,11 @@ contract GenericAaveV3 is GenericLenderBase {
         }
 
         // sell AAVE for want
-        uint256 aaveBalance = IERC20(AAVE).balanceOf(address(this));
-        _swapFrom(AAVE, address(want), aaveBalance);
+        _swapFrom(AAVE, address(want), IERC20(AAVE).balanceOf(address(this)));
 
+    }
+
+    function harvestStkAave() internal {
         // request start of cooldown period
         if(IERC20(address(stkAave)).balanceOf(address(this)) > 0) {
             stkAave.cooldown();
@@ -364,6 +373,8 @@ contract GenericAaveV3 is GenericLenderBase {
             address token = tokens[i];
             if(token == address(want)){
                 expectedRewards += rewards[i];
+            } else if(token == address(stkAave)) {
+                expectedRewards += _checkPrice(AAVE, address(want), rewards[i]);
             } else {
                 expectedRewards += _checkPrice(tokens[i], address(want), rewards[i]);
             }
@@ -391,10 +402,12 @@ contract GenericAaveV3 is GenericLenderBase {
 
             address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
             uint256 i = 0;
+            uint256 _maxLoops = maxLoops;
+            uint256 tokenIncentivesRate;
             //Passes the total Supply and the corresponding reward token address for each reward token the want has
-            while(i < rewardTokens.length && i < maxLoops) {
+            while(i < rewardTokens.length && i < _maxLoops) {
            
-                uint256 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
+                tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
 
                 incentivesRate += tokenIncentivesRate;
 
@@ -463,7 +476,11 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function _checkCooldown() internal view returns (bool) {
-        if(!isIncentivised) {
+        uint256 id;
+        assembly {
+            id := chainid()
+        }
+        if(id != 1) {
             return false;
         }
 
