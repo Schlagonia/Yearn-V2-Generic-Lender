@@ -41,6 +41,24 @@ interface IReserveInterestRateStrategy {
     );
 }
 
+interface IVeledrome {
+    struct route {
+        address from;
+        address to;
+        bool stable;
+    }
+    
+    function swapExactTokensForTokens(
+        uint amountIn,
+        uint amountOutMin,
+        route[] calldata routes,
+        address to,
+        uint deadline
+    ) external returns (uint256[] memory amounts);
+
+    function getAmountsOut(uint amountIn, route[] memory routes) external view returns (uint256[] memory amounts);
+} 
+
 /********************
  *   A lender plugin for LenderYieldOptimiser for any erc20 asset on AaveV3
  *   Made by SamPriestley.com & jmonteer. Updated for V3 by Schlagatron
@@ -80,7 +98,7 @@ contract GenericAaveV3 is GenericLenderBase {
     address public baseRouter;
     address public secondRouter;
     //Uni v2 router to be used
-    IUniswapV2Router02 public router;
+    IVeledrome public router;
 
     uint256 constant internal SECONDS_IN_YEAR = 365 days;
 
@@ -143,7 +161,7 @@ contract GenericAaveV3 is GenericLenderBase {
         WNATIVE = _wNative;
         baseRouter = _baseRouter;
         secondRouter = _secondRouter;
-        router = IUniswapV2Router02(_baseRouter);
+        router = IVeledrome(_baseRouter);
     }
 
     // for the management to activate / deactivate incentives functionality
@@ -160,7 +178,7 @@ contract GenericAaveV3 is GenericLenderBase {
     function changeRouter() external management {
         address currentRouter = address(router);
 
-        router = currentRouter == baseRouter ? IUniswapV2Router02(secondRouter) : IUniswapV2Router02(baseRouter);
+        router = currentRouter == baseRouter ? IVeledrome(secondRouter) : IVeledrome(baseRouter);
     }
 
     function setReferralCode(uint16 _customReferral) external management {
@@ -406,7 +424,6 @@ contract GenericAaveV3 is GenericLenderBase {
             uint256 tokenIncentivesRate;
             //Passes the total Supply and the corresponding reward token address for each reward token the want has
             while(i < rewardTokens.length && i < _maxLoops) {
-           
                 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
 
                 incentivesRate += tokenIncentivesRate;
@@ -414,7 +431,6 @@ contract GenericAaveV3 is GenericLenderBase {
                 i ++;
             }
         }
-
         return liquidityRate.add(incentivesRate);
     }
 
@@ -527,16 +543,28 @@ contract GenericAaveV3 is GenericLenderBase {
         );
     }
 
-    function getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (address[] memory _path) {
+    function getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (IVeledrome.route[] memory _path) {
         bool isNative = _tokenIn == WNATIVE || _tokenOut == WNATIVE;
-        _path = new address[](isNative ? 2 : 3);
-        _path[0] = _tokenIn;
+        _path = new IVeledrome.route[](isNative ? 1 : 2);
+        //_path[0] = _tokenIn;
 
         if (isNative) {
-            _path[1] = _tokenOut;
+            _path[0] = IVeledrome.route(
+                _tokenIn,
+                _tokenOut,
+                false
+            );
         } else {
-            _path[1] = WNATIVE;
-            _path[2] = _tokenOut;
+            _path[0] = IVeledrome.route(
+                _tokenIn,
+                WNATIVE,
+                false
+            );
+            _path[1] = IVeledrome.route(
+                WNATIVE,
+                _tokenOut,
+                false
+            );
         }
     }
 
