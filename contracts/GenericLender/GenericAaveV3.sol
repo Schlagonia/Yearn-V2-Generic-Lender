@@ -16,6 +16,7 @@ import {IPool} from "../Interfaces/Aave/V3/IPool.sol";
 import {IProtocolDataProvider} from "../Interfaces/Aave/V3/IProtocolDataProvider.sol";
 import {IRewardsController} from "../Interfaces/Aave/V3/IRewardsController.sol";
 import {DataTypesV3} from "../Libraries/Aave/V3/DataTypesV3.sol";
+import {ITradeFactory} from "../Interfaces/ySwap/ITradeFactory.sol";
 
 //-- IReserveInterestRateStrategy implemented manually to avoid compiler errors for aprAfterDeposit function --//
 /**
@@ -101,6 +102,8 @@ contract GenericAaveV3 is GenericLenderBase {
     address public secondRouter;
     //Uni v2 router to be used
     IVeledrome public router;
+
+    address public tradeFactory;
 
     uint256 constant internal SECONDS_IN_YEAR = 365 days;
 
@@ -532,7 +535,7 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function _swapFrom(address _from, address _to, uint256 _amountIn) internal{
-        if (_amountIn == 0) {
+        if (_amountIn == 0 || tradeFactory != address(0)) {
             return;
         }
 
@@ -600,5 +603,51 @@ contract GenericAaveV3 is GenericLenderBase {
             "!keepers"
         );
         _;
+    }
+
+    // ---------------------- YSWAPS FUNCTIONS ----------------------
+    function setTradeFactory(address _tradeFactory) external onlyGovernance {
+        if (tradeFactory != address(0)) {
+            _removeTradeFactoryPermissions();
+        }
+
+        if(isIncentivised) {
+            address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
+            ITradeFactory tf = ITradeFactory(_tradeFactory);
+            for(uint256 i; i < rewardTokens.length; i ++) {
+                address token = rewardTokens[i];
+                if(token == address(stkAave)) {
+                    IERC20(AAVE).safeApprove(_tradeFactory, type(uint256).max);
+
+                    tf.enable(AAVE, address(want));
+                } else if (token == address(want)) {
+                    continue;
+                } else {
+                    IERC20(token).safeApprove(_tradeFactory, type(uint256).max);
+
+                    tf.enable(token, address(want));
+                }
+            }
+        }
+        tradeFactory = _tradeFactory;
+    }
+
+    function removeTradeFactoryPermissions() external management {
+        _removeTradeFactoryPermissions();
+    }
+
+    function _removeTradeFactoryPermissions() internal {
+        if(isIncentivised) {
+            address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
+            for(uint256 i; i < rewardTokens.length; i ++) {
+                address token = rewardTokens[i];
+                if(token == address(stkAave)) {
+                    IERC20(AAVE).safeApprove(tradeFactory, 0);
+                } else {
+                    IERC20(token).safeApprove(tradeFactory, 0);
+                }
+            }
+        }
+        tradeFactory = address(0);
     }
 }
