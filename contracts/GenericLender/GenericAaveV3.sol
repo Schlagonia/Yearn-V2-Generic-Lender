@@ -166,7 +166,7 @@ contract GenericAaveV3 is GenericLenderBase {
         WNATIVE = _wNative;
         baseRouter = _baseRouter;
         secondRouter = _secondRouter;
-        profitFactor = 1000;
+        profitFactor = 100;
         router = IVeledrome(_baseRouter);
     }
 
