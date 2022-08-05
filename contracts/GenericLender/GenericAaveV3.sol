@@ -98,6 +98,7 @@ contract GenericAaveV3 is GenericLenderBase {
     ***/
     //Wrapped native token for chain i.e. WETH
     address public WNATIVE;
+    ///For Optimism we will only be using the Veledrome router \\\\
     address public baseRouter;
     address public secondRouter;
     //Uni v2 router to be used
@@ -181,6 +182,7 @@ contract GenericAaveV3 is GenericLenderBase {
         isIncentivised = _isIncentivised;
     }
 
+    //On optimism there is only one router that complies with the Teledrome interfaces so this will not apply
     function changeRouter() external management {
         address currentRouter = address(router);
 
