@@ -4,7 +4,7 @@ from pdb import pm
 import yaml
 import click
 import os
-from brownie import interface, config, accounts, Contract, project, Strategy, GenericAaveV3, network, web3
+from brownie import interface, config, accounts, Contract, project, OptStrategy, GenericAaveV3, network, web3
 from eth_utils import is_checksum_address
 
 yearnDep = config["dependencies"][0]
@@ -66,7 +66,7 @@ def clone_strat():
     global strategy
     #strategy = Strategy.deploy(vault.address, param, publish_source=True)
     #strategy = Strategy.at(tx.return_value)
-    strategy = Strategy.at("0xdF43263DFec19117f2Fe79d1D9842a10c7495CcD")
+    strategy = OptStrategy.at("0xdF43263DFec19117f2Fe79d1D9842a10c7495CcD")
     print(f"Strategy cloned to {strategy.address}")
     """
     vault.addStrategy(
@@ -78,7 +78,7 @@ def clone_strat():
         param
     )
     """
-    Strategy.publish_source(strategy)
+    OptStrategy.publish_source(strategy)
 
     #vault.setGovernance(gov, param);
     
@@ -107,15 +107,27 @@ def deploy_v3():
 
     strategy.addLender(v3.address, param)
 
+def harvest():
+    strat = OptStrategy.at("0xdF43263DFec19117f2Fe79d1D9842a10c7495CcD")
+    plug = GenericAaveV3.at("0x24ff88705C1b141a69B207F694790185a423f2A2")
+    accounts.at("0xB865AAf1f9f60630934739595f183C4900f65ed9", force=True)
+    token.deposit( { "from": acct, 'value': 1e17})
+    token.approve(vault.address, 1e18, param)
+    vault.deposit(1e16, param)
 
+    strat.harvest(param)
+    print(f"Vault assets ${token.balanceOf(vault.address)}")
+    print(f"Strat assets ${token.balanceOf(strat.address)}")
+    print(f"V3 token ${token.balanceOf(plug.address)}")
+    print(f"V3 total assets ${plug.nav()} and current apr {plug.apr()}")
 
 def main():
     #print(project.load(yearnDep))
     #global dev
     #dev = accounts.load(click.prompt("Account", type=click.Choice(accounts.load())))
     print(f"You are using: 'dev' [{dev.address}]")
-
+    harvest()
     print("Deploying")
     #clone_vault()
-    clone_strat()
+    #clone_strat()
     #deploy_v3()
