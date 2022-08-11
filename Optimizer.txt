@@ -49,12 +49,6 @@ interface IGenericLender {
     function sweep(address _token) external;
 }
 
-// Part: IUni
-
-interface IUni {
-    function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory amounts);
-}
-
 // Part: IWantToEth
 
 interface IWantToEth {
@@ -1390,7 +1384,7 @@ abstract contract BaseStrategy {
     }
 }
 
-// File: Strategy.sol
+// File: OptStrategy.sol
 
 /********************
  *
@@ -1404,13 +1398,13 @@ abstract contract BaseStrategy {
  *
  ********************* */
 
-contract Strategy is BaseStrategy {
+contract OptStrategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
-    address public constant uniswapRouter = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
-    address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    //address public constant uniswapRouter = address(0);
+    //address public constant weth = 0x4200000000000000000000000000000000000006;
     uint256 public withdrawalThreshold = 1e16;
     uint256 public constant SECONDSPERYEAR = 31556952;
 
@@ -1446,7 +1440,7 @@ contract Strategy is BaseStrategy {
             newStrategy := create(0, clone_code, 0x37)
         }
 
-        Strategy(newStrategy).initialize(_vault, _strategist, _rewards, _keeper);
+        OptStrategy(newStrategy).initialize(_vault, _strategist, _rewards, _keeper);
 
         emit Cloned(newStrategy);
     }
@@ -1911,49 +1905,13 @@ contract Strategy is BaseStrategy {
     }
 
     function ethToWant(uint256 _amount) public override view returns (uint256) {
-        //three situations
-        //1 currency is eth so no change.
-        //2 we use external oracle
-        //3 we use uniswap swap price
-        if (address(want) == weth) {
-            return _amount;
-        } else if (wantToEthOracle != address(0)) {
+        //two situations
+        //1 we use external oracle
+        //1 return _amount.
+        if (wantToEthOracle != address(0)) {
             return IWantToEth(wantToEthOracle).ethToWant(_amount);
-        }
-
-        address[] memory path = new address[](2);
-        path[0] = weth;
-        path[1] = address(want);
-
-        uint256[] memory amounts = IUni(uniswapRouter).getAmountsOut(_amount, path);
-        return amounts[amounts.length - 1];
-    }
-
-    function tendTrigger(uint256 callCost) public view override returns (bool) {
-        // make sure to call tendtrigger with same callcost as harvestTrigger
-        if (harvestTrigger(callCost)) {
-            return false;
-        }
-
-        //now let's check if there is better apr somewhere else.
-        //If there is and profit potential is worth changing then lets do it
-        (uint256 lowest, uint256 lowestApr, , uint256 potential) = estimateAdjustPosition();
-
-        //if protential > lowestApr it means we are changing horses
-        if (potential > lowestApr) {
-            uint256 nav = lenders[lowest].nav();
-
-            //To calculate our potential profit increase we work out how much extra
-            //we would make in a typical harvest interlude. That is maxReportingDelay
-            //then we see if the extra profit is worth more than the gas cost * profitFactor
-
-            //safe math not needed here
-            //apr is scaled by 1e18 so we downscale here
-            uint256 profitIncrease = (nav.mul(potential) - nav.mul(lowestApr)).div(1e18).mul(maxReportDelay).div(SECONDSPERYEAR);
-
-            uint256 wantCallCost = ethToWant(callCost);
-
-            return (wantCallCost.mul(profitFactor) < profitIncrease);
+        } else {
+            return _amount;
         }
     }
 
