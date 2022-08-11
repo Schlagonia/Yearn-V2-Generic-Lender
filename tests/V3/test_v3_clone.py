@@ -21,6 +21,7 @@ def test_v3_clone(
     assert v3Plugin.aToken() == new_plugin.aToken()
     assert v3Plugin.WNATIVE() == wftm.address
     assert v3Plugin.router() == router
+    assert new_plugin.apr() == v3Plugin.apr()
     
 
 def test_double_initialize(
