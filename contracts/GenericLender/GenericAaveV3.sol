@@ -88,7 +88,7 @@ contract GenericAaveV3 is GenericLenderBase {
 
     // Used to assure we stop infinite while loops
     //Should never be more reward tokens than 5
-    uint256 public maxLoops = 5;
+    uint256 public constant maxLoops = 5;
 
     uint16 internal constant DEFAULT_REFERRAL = 7; 
     uint16 internal customReferral;
@@ -98,8 +98,10 @@ contract GenericAaveV3 is GenericLenderBase {
     ***/
     //Wrapped native token for chain i.e. WETH
     address public WNATIVE;
+    //USDC for the middle of swaps
+    address internal constant usdc = 0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
     //Asset to use for swap as the middle
-    address public middleSwapToken = 0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
+    address public middleSwapToken;
     //stable bool should be true if we are using usdc as the middle token and want is a stable coin
     bool public stable;
     ///For Optimism we will only be using the Veledrome router \\\\
@@ -167,6 +169,9 @@ contract GenericAaveV3 is GenericLenderBase {
 
         IERC20(address(want)).safeApprove(address(_lendingPool()), type(uint256).max);
 
+        //Defaul to USDC due to Veledrome liquidity
+        middleSwapToken = usdc;
+    
         //Set Chain Specific Addresses
         WNATIVE = _wNative;
         baseRouter = _baseRouter;
@@ -410,7 +415,7 @@ contract GenericAaveV3 is GenericLenderBase {
             } else if(token == address(stkAave)) {
                 expectedRewards += _checkPrice(AAVE, WNATIVE, rewards[i]);
             } else {
-                expectedRewards += _checkPrice(tokens[i], WNATIVE, rewards[i]);
+                expectedRewards += _checkPrice(token, WNATIVE, rewards[i]);
             }
         }
         
@@ -584,7 +589,9 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     //External function to change the token we use for swaps and the bool for the second route in path
+    //Can only change to either the native or USDC.
     function setMiddleSwapToken(address _middleSwapToken, bool _stable) external management {
+        require(_middleSwapToken == WNATIVE || _middleSwapToken == usdc);
         middleSwapToken = _middleSwapToken;
         stable = _stable;
     }

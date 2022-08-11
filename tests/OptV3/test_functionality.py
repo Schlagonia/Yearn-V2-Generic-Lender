@@ -70,3 +70,29 @@ def test_change_router(
 
     with brownie.reverts():
         v3Plugin.changeRouter({"from": rando})
+
+def test_change_middle_token(
+    v3Plugin,
+    gov,
+    rando,
+    router,
+    router2,
+    usdc,
+    weth
+):
+    assert v3Plugin.middleSwapToken() == usdc
+    assert v3Plugin.stable() == False
+
+    v3Plugin.setMiddleSwapToken(weth, False, {"from": gov})
+
+    assert v3Plugin.middleSwapToken() == weth
+    assert v3Plugin.stable() == False
+
+    v3Plugin.setMiddleSwapToken(weth, True, {"from": gov})
+
+    assert v3Plugin.middleSwapToken() == weth
+    assert v3Plugin.stable() == True
+
+    #Should not be able to inject any other address
+    with brownie.reverts():
+        v3Plugin.setMiddleSwapToken(rando, True, {"from": gov})

@@ -50,16 +50,17 @@ def test_v3_clone_trigger(
     assert v3Plugin.aToken() == new_plugin.aToken()
     assert new_plugin.WNATIVE() == weth.address
     assert new_plugin.router() == router
-    #assert new_plugin.apr() == v3Plugin.apr()
+    assert new_plugin.apr() == v3Plugin.apr()
     vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from":gov})
     strategy.addLender(new_plugin, {"from": gov})
-
+    new_plugin.setMiddleSwapToken(weth, False, {"from": gov})
     deposit(10e18, whale, weth, vault)
 
     strategy.harvest({"from": gov})
-    assert new_plugin.harvestTrigger(1) == False
-    chain.sleep(10)
-    assert new_plugin.harvestTrigger(1) == True
+    assert new_plugin.harvestTrigger("1") == False
+    sleep(chain, 100)
+    
+    assert new_plugin.harvestTrigger("1") == True
 
 def test_v3_clone_usdc(
     v3PluginUsdc,
@@ -107,17 +108,15 @@ def test_v3_clone_usdc_harvest(
     assert v3Plugin.lenderName() == new_plugin.lenderName()
     assert v3Plugin.isIncentivised() == new_plugin.isIncentivised()
     assert v3Plugin.aToken() == new_plugin.aToken()
-    #assert new_plugin.WNATIVE() == weth.address
     assert new_plugin.router() == router
-    #assert new_plugin.getRewardTokens() == rewardTokens
-    #assert new_plugin.apr() == apr
+
     vaultUsdc.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from":gov})
     strategy.addLender(new_plugin, {"from": gov})
     deposit(1000e6, whaleUsdc, usdc, vaultUsdc)
     strategy.harvest({"from": gov})
-    assert new_plugin.harvestTrigger(1) == False
-    chain.sleep(10)
-
+    assert new_plugin.harvestTrigger("1") == False
+    sleep(chain, 100)
+    assert new_plugin.harvestTrigger("1") == True 
     new_plugin.harvest({"from":gov})
     assert op.balanceOf(new_plugin.address) == 0
 
