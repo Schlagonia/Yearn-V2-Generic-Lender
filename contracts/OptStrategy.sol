@@ -29,8 +29,6 @@ contract OptStrategy is BaseStrategy {
     using Address for address;
     using SafeMath for uint256;
 
-    //address public constant uniswapRouter = address(0);
-    //address public constant weth = 0x4200000000000000000000000000000000000006;
     uint256 public withdrawalThreshold = 1e16;
     uint256 public constant SECONDSPERYEAR = 31556952;
 

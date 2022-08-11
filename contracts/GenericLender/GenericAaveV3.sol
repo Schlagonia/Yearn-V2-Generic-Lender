@@ -169,7 +169,7 @@ contract GenericAaveV3 is GenericLenderBase {
 
         IERC20(address(want)).safeApprove(address(_lendingPool()), type(uint256).max);
 
-        //Defaul to USDC due to Veledrome liquidity
+        //Default to USDC due to Veledrome liquidity
         middleSwapToken = usdc;
     
         //Set Chain Specific Addresses
