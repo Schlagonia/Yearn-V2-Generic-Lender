@@ -98,6 +98,10 @@ contract GenericAaveV3 is GenericLenderBase {
     ***/
     //Wrapped native token for chain i.e. WETH
     address public WNATIVE;
+    //Asset to use for swap as the middle
+    address public middleSwapToken = 0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
+    //stable bool should be true if we are using usdc as the middle token and want is a stable coin
+    bool public stable;
     ///For Optimism we will only be using the Veledrome router \\\\
     address public baseRouter;
     address public secondRouter;
@@ -556,9 +560,8 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (IVeledrome.route[] memory _path) {
-        bool isNative = _tokenIn == WNATIVE || _tokenOut == WNATIVE;
+        bool isNative = _tokenIn == middleSwapToken || _tokenOut == middleSwapToken;
         _path = new IVeledrome.route[](isNative ? 1 : 2);
-        //_path[0] = _tokenIn;
 
         if (isNative) {
             _path[0] = IVeledrome.route(
@@ -569,15 +572,21 @@ contract GenericAaveV3 is GenericLenderBase {
         } else {
             _path[0] = IVeledrome.route(
                 _tokenIn,
-                WNATIVE,
+                middleSwapToken,
                 false
             );
             _path[1] = IVeledrome.route(
-                WNATIVE,
+                middleSwapToken,
                 _tokenOut,
-                false
+                stable
             );
         }
+    }
+
+    //External function to change the token we use for swaps and the bool for the second route in path
+    function setMiddleSwapToken(address _middleSwapToken, bool _stable) external management {
+        middleSwapToken = _middleSwapToken;
+        stable = _stable;
     }
 
     function _lendingPool() internal view returns (IPool lendingPool) {
