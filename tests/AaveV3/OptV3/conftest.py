@@ -212,3 +212,18 @@ def pluggedVaultUsdc(
     vaultUsdc.addStrategy(pluggedStrategyUsdc, 10_000, 0, 2 ** 256 - 1, 1_000, {"from":gov})
     pluggedVaultUsdc = vaultUsdc
     yield pluggedVaultUsdc
+
+@pytest.fixture
+def trade_factory():
+    yield Contract("0x99d8679bE15011dEAD893EB4F5df474a4e6a8b29")
+
+@pytest.fixture
+def ymechs_safe():
+    yield Contract("0x2C01B4AD51a67E2d8F02208F54dF9aC4c0B778B6")
+
+@pytest.fixture(scope="module")
+def multicall_swapper(interface):
+    yield interface.MultiCallOptimizedSwapper(
+        #"0xceB202F25B50e8fAF212dE3CA6C53512C37a01D2"
+        "0xB2F65F254Ab636C96fb785cc9B4485cbeD39CDAA"
+    )
