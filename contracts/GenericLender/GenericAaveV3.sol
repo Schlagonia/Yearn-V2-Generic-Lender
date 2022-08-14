@@ -16,6 +16,7 @@ import {IPool} from "../Interfaces/Aave/V3/IPool.sol";
 import {IProtocolDataProvider} from "../Interfaces/Aave/V3/IProtocolDataProvider.sol";
 import {IRewardsController} from "../Interfaces/Aave/V3/IRewardsController.sol";
 import {DataTypesV3} from "../Libraries/Aave/V3/DataTypesV3.sol";
+import {ITradeFactory} from "../Interfaces/ySwap/ITradeFactory.sol";
 
 //-- IReserveInterestRateStrategy implemented manually to avoid compiler errors for aprAfterDeposit function --//
 /**
@@ -87,7 +88,7 @@ contract GenericAaveV3 is GenericLenderBase {
 
     // Used to assure we stop infinite while loops
     //Should never be more reward tokens than 5
-    uint256 public maxLoops = 5;
+    uint256 public constant maxLoops = 5;
 
     uint16 internal constant DEFAULT_REFERRAL = 7; 
     uint16 internal customReferral;
@@ -97,10 +98,19 @@ contract GenericAaveV3 is GenericLenderBase {
     ***/
     //Wrapped native token for chain i.e. WETH
     address public WNATIVE;
+    //USDC for the middle of swaps
+    address internal constant usdc = 0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
+    //Asset to use for swap as the middle
+    address public middleSwapToken;
+    //stable bool should be true if we are using usdc as the middle token and want is a stable coin
+    bool public stable;
+    ///For Optimism we will only be using the Veledrome router \\\\
     address public baseRouter;
     address public secondRouter;
     //Uni v2 router to be used
     IVeledrome public router;
+
+    address public tradeFactory;
 
     uint256 constant internal SECONDS_IN_YEAR = 365 days;
 
@@ -159,11 +169,14 @@ contract GenericAaveV3 is GenericLenderBase {
 
         IERC20(address(want)).safeApprove(address(_lendingPool()), type(uint256).max);
 
+        //Default to USDC due to Veledrome liquidity
+        middleSwapToken = usdc;
+    
         //Set Chain Specific Addresses
         WNATIVE = _wNative;
         baseRouter = _baseRouter;
         secondRouter = _secondRouter;
-        profitFactor = 1000;
+        profitFactor = 100;
         router = IVeledrome(_baseRouter);
     }
 
@@ -178,6 +191,7 @@ contract GenericAaveV3 is GenericLenderBase {
         isIncentivised = _isIncentivised;
     }
 
+    //On optimism there is only one router that complies with the Teledrome interfaces so this will not apply
     function changeRouter() external management {
         address currentRouter = address(router);
 
@@ -401,7 +415,7 @@ contract GenericAaveV3 is GenericLenderBase {
             } else if(token == address(stkAave)) {
                 expectedRewards += _checkPrice(AAVE, WNATIVE, rewards[i]);
             } else {
-                expectedRewards += _checkPrice(tokens[i], WNATIVE, rewards[i]);
+                expectedRewards += _checkPrice(token, WNATIVE, rewards[i]);
             }
         }
         
@@ -532,7 +546,7 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function _swapFrom(address _from, address _to, uint256 _amountIn) internal{
-        if (_amountIn == 0) {
+        if (_amountIn == 0 || tradeFactory != address(0)) {
             return;
         }
 
@@ -551,9 +565,8 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (IVeledrome.route[] memory _path) {
-        bool isNative = _tokenIn == WNATIVE || _tokenOut == WNATIVE;
+        bool isNative = _tokenIn == middleSwapToken || _tokenOut == middleSwapToken;
         _path = new IVeledrome.route[](isNative ? 1 : 2);
-        //_path[0] = _tokenIn;
 
         if (isNative) {
             _path[0] = IVeledrome.route(
@@ -564,15 +577,23 @@ contract GenericAaveV3 is GenericLenderBase {
         } else {
             _path[0] = IVeledrome.route(
                 _tokenIn,
-                WNATIVE,
+                middleSwapToken,
                 false
             );
             _path[1] = IVeledrome.route(
-                WNATIVE,
+                middleSwapToken,
                 _tokenOut,
-                false
+                stable
             );
         }
+    }
+
+    //External function to change the token we use for swaps and the bool for the second route in path
+    //Can only change to either the native or USDC.
+    function setMiddleSwapToken(address _middleSwapToken, bool _stable) external management {
+        require(_middleSwapToken == WNATIVE || _middleSwapToken == usdc);
+        middleSwapToken = _middleSwapToken;
+        stable = _stable;
     }
 
     function _lendingPool() internal view returns (IPool lendingPool) {
@@ -600,5 +621,51 @@ contract GenericAaveV3 is GenericLenderBase {
             "!keepers"
         );
         _;
+    }
+
+    // ---------------------- YSWAPS FUNCTIONS ----------------------
+    function setTradeFactory(address _tradeFactory) external onlyGovernance {
+        if (tradeFactory != address(0)) {
+            _removeTradeFactoryPermissions();
+        }
+
+        if(isIncentivised) {
+            address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
+            ITradeFactory tf = ITradeFactory(_tradeFactory);
+            for(uint256 i; i < rewardTokens.length; i ++) {
+                address token = rewardTokens[i];
+                if(token == address(stkAave)) {
+                    IERC20(AAVE).safeApprove(_tradeFactory, type(uint256).max);
+
+                    tf.enable(AAVE, address(want));
+                } else if (token == address(want)) {
+                    continue;
+                } else {
+                    IERC20(token).safeApprove(_tradeFactory, type(uint256).max);
+
+                    tf.enable(token, address(want));
+                }
+            }
+        }
+        tradeFactory = _tradeFactory;
+    }
+
+    function removeTradeFactoryPermissions() external management {
+        _removeTradeFactoryPermissions();
+    }
+
+    function _removeTradeFactoryPermissions() internal {
+        if(isIncentivised) {
+            address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
+            for(uint256 i; i < rewardTokens.length; i ++) {
+                address token = rewardTokens[i];
+                if(token == address(stkAave)) {
+                    IERC20(AAVE).safeApprove(tradeFactory, 0);
+                } else {
+                    IERC20(token).safeApprove(tradeFactory, 0);
+                }
+            }
+        }
+        tradeFactory = address(0);
     }
 }

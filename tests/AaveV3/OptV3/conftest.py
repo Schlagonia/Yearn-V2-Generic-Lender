@@ -90,9 +90,9 @@ def strategy(
     keeper,
     vault,
     gov,
-    FtmStrategy,
+    OptStrategy,
 ):
-    strategy = strategist.deploy(FtmStrategy, vault)
+    strategy = strategist.deploy(OptStrategy, vault)
     strategy.setKeeper(keeper)
 
     assert strategy.numLenders() == 0
@@ -104,9 +104,9 @@ def strategyUsdc(
     keeper,
     vaultUsdc,
     gov,
-    FtmStrategy,
+    OptStrategy,
 ):
-    strategyUsdc = strategist.deploy(FtmStrategy, vaultUsdc)
+    strategyUsdc = strategist.deploy(OptStrategy, vaultUsdc)
     strategyUsdc.setKeeper(keeper)
 
     assert strategyUsdc.numLenders() == 0

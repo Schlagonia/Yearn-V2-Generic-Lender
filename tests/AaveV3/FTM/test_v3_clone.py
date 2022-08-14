@@ -7,7 +7,7 @@ def test_v3_clone(
     v3Plugin,
     GenericAaveV3,
     strategy,
-    weth,
+    wftm,
     router,
     router2
 ):
@@ -19,8 +19,9 @@ def test_v3_clone(
     assert v3Plugin.lenderName() == new_plugin.lenderName()
     assert v3Plugin.isIncentivised() == new_plugin.isIncentivised()
     assert v3Plugin.aToken() == new_plugin.aToken()
-    assert v3Plugin.WNATIVE() == weth.address
+    assert v3Plugin.WNATIVE() == wftm.address
     assert v3Plugin.router() == router
+    assert new_plugin.apr() == v3Plugin.apr()
     
 
 def test_double_initialize(
@@ -28,7 +29,7 @@ def test_double_initialize(
     GenericAaveV3,
     strategy,
     strategist,
-    weth,
+    wftm,
     router,
     router2
 ):
@@ -36,4 +37,4 @@ def test_double_initialize(
     new_plugin = GenericAaveV3.at(tx.return_value)
 
     with brownie.reverts():
-        new_plugin.initialize(weth.address, router, router2, True, {"from":strategist})
+        new_plugin.initialize(wftm.address, router, router2, True, {"from":strategist})

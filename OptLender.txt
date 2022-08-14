@@ -1330,159 +1330,34 @@ interface IStakedAave {
     function UNSTAKE_WINDOW() external view returns (uint256);
 }
 
-// Part: IUniswapV2Router01
+// Part: ITradeFactory
 
-interface IUniswapV2Router01 {
-    function factory() external pure returns (address);
+interface ITradeFactory {
+    function enable(address, address) external;
 
-    function WETH() external pure returns (address);
+    function grantRole(bytes32 role, address account) external;
 
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint256 amountADesired,
-        uint256 amountBDesired,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    )
-        external
-        returns (
-            uint256 amountA,
-            uint256 amountB,
-            uint256 liquidity
-        );
+    function STRATEGY() external view returns (bytes32);
+}
 
-    function addLiquidityETH(
-        address token,
-        uint256 amountTokenDesired,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    )
-        external
-        payable
-        returns (
-            uint256 amountToken,
-            uint256 amountETH,
-            uint256 liquidity
-        );
+// Part: IVeledrome
 
-    function removeLiquidity(
-        address tokenA,
-        address tokenB,
-        uint256 liquidity,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountA, uint256 amountB);
-
-    function removeLiquidityETH(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountToken, uint256 amountETH);
-
-    function removeLiquidityWithPermit(
-        address tokenA,
-        address tokenB,
-        uint256 liquidity,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountA, uint256 amountB);
-
-    function removeLiquidityETHWithPermit(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountToken, uint256 amountETH);
-
+interface IVeledrome {
+    struct route {
+        address from;
+        address to;
+        bool stable;
+    }
+    
     function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
+        uint amountIn,
+        uint amountOutMin,
+        route[] calldata routes,
         address to,
-        uint256 deadline
+        uint deadline
     ) external returns (uint256[] memory amounts);
 
-    function swapTokensForExactTokens(
-        uint256 amountOut,
-        uint256 amountInMax,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapExactETHForTokens(
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable returns (uint256[] memory amounts);
-
-    function swapTokensForExactETH(
-        uint256 amountOut,
-        uint256 amountInMax,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapExactTokensForETH(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapETHForExactTokens(
-        uint256 amountOut,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable returns (uint256[] memory amounts);
-
-    function quote(
-        uint256 amountA,
-        uint256 reserveA,
-        uint256 reserveB
-    ) external pure returns (uint256 amountB);
-
-    function getAmountOut(
-        uint256 amountIn,
-        uint256 reserveIn,
-        uint256 reserveOut
-    ) external pure returns (uint256 amountOut);
-
-    function getAmountIn(
-        uint256 amountOut,
-        uint256 reserveIn,
-        uint256 reserveOut
-    ) external pure returns (uint256 amountIn);
-
-    function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory amounts);
-
-    function getAmountsIn(uint256 amountOut, address[] calldata path) external view returns (uint256[] memory amounts);
+    function getAmountsOut(uint amountIn, route[] memory routes) external view returns (uint256[] memory amounts);
 }
 
 // Part: OpenZeppelin/openzeppelin-contracts@3.1.0/Address
@@ -2896,55 +2771,6 @@ interface IRewardsController is IRewardsDistributor {
  
 }
 
-// Part: IUniswapV2Router02
-
-interface IUniswapV2Router02 is IUniswapV2Router01 {
-    function removeLiquidityETHSupportingFeeOnTransferTokens(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountETH);
-
-    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountETH);
-
-    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external;
-
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable;
-
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external;
-}
-
 // Part: OpenZeppelin/openzeppelin-contracts@3.1.0/SafeERC20
 
 /**
@@ -3330,6 +3156,8 @@ contract GenericAaveV3 is GenericLenderBase {
     address public keep3r;
 
     bool public isIncentivised;
+    //Amount to multiply callcost by in harvestTrigger
+    uint256 profitFactor;
 
     // Used to assure we stop infinite while loops
     //Should never be more reward tokens than 5
@@ -3343,10 +3171,13 @@ contract GenericAaveV3 is GenericLenderBase {
     ***/
     //Wrapped native token for chain i.e. WETH
     address public WNATIVE;
+    ///For Optimism we will only be using the Veledrome router \\\\
     address public baseRouter;
     address public secondRouter;
     //Uni v2 router to be used
-    IUniswapV2Router02 public router;
+    IVeledrome public router;
+
+    address public tradeFactory;
 
     uint256 constant internal SECONDS_IN_YEAR = 365 days;
 
@@ -3409,7 +3240,8 @@ contract GenericAaveV3 is GenericLenderBase {
         WNATIVE = _wNative;
         baseRouter = _baseRouter;
         secondRouter = _secondRouter;
-        router = IUniswapV2Router02(_baseRouter);
+        profitFactor = 100;
+        router = IVeledrome(_baseRouter);
     }
 
     // for the management to activate / deactivate incentives functionality
@@ -3423,15 +3255,20 @@ contract GenericAaveV3 is GenericLenderBase {
         isIncentivised = _isIncentivised;
     }
 
+    //On optimism there is only one router that complies with the Teledrome interfaces so this will not apply
     function changeRouter() external management {
         address currentRouter = address(router);
 
-        router = currentRouter == baseRouter ? IUniswapV2Router02(secondRouter) : IUniswapV2Router02(baseRouter);
+        router = currentRouter == baseRouter ? IVeledrome(secondRouter) : IVeledrome(baseRouter);
     }
 
     function setReferralCode(uint16 _customReferral) external management {
         require(_customReferral != 0, "!invalid referral code");
         customReferral = _customReferral;
+    }
+
+    function setProfitFactor(uint256 _profitFactor) external management {
+        profitFactor = _profitFactor;
     }
 
     function setKeep3r(address _keep3r) external management {
@@ -3637,16 +3474,16 @@ contract GenericAaveV3 is GenericLenderBase {
         for(uint256 i = 0; i < rewards.length; i ++) {
 
             address token = tokens[i];
-            if(token == address(want)){
+            if(token == WNATIVE){
                 expectedRewards += rewards[i];
             } else if(token == address(stkAave)) {
-                expectedRewards += _checkPrice(AAVE, address(want), rewards[i]);
+                expectedRewards += _checkPrice(AAVE, WNATIVE, rewards[i]);
             } else {
-                expectedRewards += _checkPrice(tokens[i], address(want), rewards[i]);
+                expectedRewards += _checkPrice(tokens[i], WNATIVE, rewards[i]);
             }
         }
         
-        return expectedRewards >= callcost;
+        return expectedRewards >= callcost.mul(profitFactor);
     }
 
     function _nav() internal view returns (uint256) {
@@ -3672,7 +3509,6 @@ contract GenericAaveV3 is GenericLenderBase {
             uint256 tokenIncentivesRate;
             //Passes the total Supply and the corresponding reward token address for each reward token the want has
             while(i < rewardTokens.length && i < _maxLoops) {
-           
                 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
 
                 incentivesRate += tokenIncentivesRate;
@@ -3680,7 +3516,6 @@ contract GenericAaveV3 is GenericLenderBase {
                 i ++;
             }
         }
-
         return liquidityRate.add(incentivesRate);
     }
 
@@ -3775,7 +3610,7 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function _swapFrom(address _from, address _to, uint256 _amountIn) internal{
-        if (_amountIn == 0) {
+        if (_amountIn == 0 || tradeFactory != address(0)) {
             return;
         }
 
@@ -3793,16 +3628,28 @@ contract GenericAaveV3 is GenericLenderBase {
         );
     }
 
-    function getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (address[] memory _path) {
+    function getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (IVeledrome.route[] memory _path) {
         bool isNative = _tokenIn == WNATIVE || _tokenOut == WNATIVE;
-        _path = new address[](isNative ? 2 : 3);
-        _path[0] = _tokenIn;
+        _path = new IVeledrome.route[](isNative ? 1 : 2);
+        //_path[0] = _tokenIn;
 
         if (isNative) {
-            _path[1] = _tokenOut;
+            _path[0] = IVeledrome.route(
+                _tokenIn,
+                _tokenOut,
+                false
+            );
         } else {
-            _path[1] = WNATIVE;
-            _path[2] = _tokenOut;
+            _path[0] = IVeledrome.route(
+                _tokenIn,
+                WNATIVE,
+                false
+            );
+            _path[1] = IVeledrome.route(
+                WNATIVE,
+                _tokenOut,
+                false
+            );
         }
     }
 
@@ -3831,5 +3678,51 @@ contract GenericAaveV3 is GenericLenderBase {
             "!keepers"
         );
         _;
+    }
+
+    // ---------------------- YSWAPS FUNCTIONS ----------------------
+    function setTradeFactory(address _tradeFactory) external onlyGovernance {
+        if (tradeFactory != address(0)) {
+            _removeTradeFactoryPermissions();
+        }
+
+        if(isIncentivised) {
+            address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
+            ITradeFactory tf = ITradeFactory(_tradeFactory);
+            for(uint256 i; i < rewardTokens.length; i ++) {
+                address token = rewardTokens[i];
+                if(token == address(stkAave)) {
+                    IERC20(AAVE).safeApprove(_tradeFactory, type(uint256).max);
+
+                    tf.enable(AAVE, address(want));
+                } else if (token == address(want)) {
+                    continue;
+                } else {
+                    IERC20(token).safeApprove(_tradeFactory, type(uint256).max);
+
+                    tf.enable(token, address(want));
+                }
+            }
+        }
+        tradeFactory = _tradeFactory;
+    }
+
+    function removeTradeFactoryPermissions() external management {
+        _removeTradeFactoryPermissions();
+    }
+
+    function _removeTradeFactoryPermissions() internal {
+        if(isIncentivised) {
+            address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
+            for(uint256 i; i < rewardTokens.length; i ++) {
+                address token = rewardTokens[i];
+                if(token == address(stkAave)) {
+                    IERC20(AAVE).safeApprove(tradeFactory, 0);
+                } else {
+                    IERC20(token).safeApprove(tradeFactory, 0);
+                }
+            }
+        }
+        tradeFactory = address(0);
     }
 }
