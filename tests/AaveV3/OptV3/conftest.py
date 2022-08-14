@@ -215,7 +215,7 @@ def pluggedVaultUsdc(
 
 @pytest.fixture
 def trade_factory():
-    yield Contract("0x99d8679bE15011dEAD893EB4F5df474a4e6a8b29")
+    yield Contract("0x21d7B09Bcf08F7b6b872BED56cB32416AE70bCC8")
 
 @pytest.fixture
 def ymechs_safe():
