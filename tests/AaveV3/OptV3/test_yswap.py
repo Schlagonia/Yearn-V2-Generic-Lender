@@ -107,7 +107,7 @@ def test_yswap(
     tx = strategy.harvest({"from": strategist})
     print(tx.events)
     assert tx.events["Harvested"]["profit"] >= afterBal
-    print(f"manager addy {plugin.manage()}")
+
     plugin.removeTradeFactoryPermissions({"from": strategist})
     assert plugin.tradeFactory() == ZERO_ADDRESS
     assert op.allowance(plugin.address, trade_factory.address) == 0

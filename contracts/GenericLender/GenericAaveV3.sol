@@ -668,8 +668,4 @@ contract GenericAaveV3 is GenericLenderBase {
         }
         tradeFactory = address(0);
     }
-
-    function manage() external view returns (address) {
-        return IBaseStrategy(strategy).strategist();
-    }
 }
