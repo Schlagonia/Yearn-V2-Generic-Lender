@@ -215,15 +215,3 @@ def pluggedVaultUsdc(
 @pytest.fixture
 def trade_factory():
     yield Contract("0x21d7B09Bcf08F7b6b872BED56cB32416AE70bCC8")
-"""
-@pytest.fixture
-def ymechs_safe():
-    yield Contract("0x7Cd0A1A67B6aC5fC053d9b60C1E84592F248155b")
-
-@pytest.fixture(scope="module")
-def multicall_swapper(interface):
-    yield interface.MultiCallOptimizedSwapper(
-        #"0xceB202F25B50e8fAF212dE3CA6C53512C37a01D2"
-        "0xB2F65F254Ab636C96fb785cc9B4485cbeD39CDAA"
-    )
-"""

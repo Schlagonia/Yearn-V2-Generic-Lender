@@ -3,6 +3,8 @@ import brownie
 
 from brownie import Wei
 
+from .conftest import strategist
+
 
 #Set is Incentivised
 def test_set_incentivized(
@@ -78,17 +80,18 @@ def test_change_middle_token(
     router,
     router2,
     usdc,
-    weth
+    weth,
+    strategist
 ):
     assert v3Plugin.middleSwapToken() == usdc
     assert v3Plugin.stable() == False
 
-    v3Plugin.setMiddleSwapToken(weth, False, {"from": gov})
+    v3Plugin.setMiddleSwapToken(weth, False, {"from": strategist})
 
     assert v3Plugin.middleSwapToken() == weth
     assert v3Plugin.stable() == False
 
-    v3Plugin.setMiddleSwapToken(weth, True, {"from": gov})
+    v3Plugin.setMiddleSwapToken(weth, True, {"from": strategist})
 
     assert v3Plugin.middleSwapToken() == weth
     assert v3Plugin.stable() == True
@@ -96,3 +99,4 @@ def test_change_middle_token(
     #Should not be able to inject any other address
     with brownie.reverts():
         v3Plugin.setMiddleSwapToken(rando, True, {"from": gov})
+
