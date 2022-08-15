@@ -1,126 +1,121 @@
-from brownie import Contract, Wei
+from brownie import Contract, Wei, reverts, ZERO_ADDRESS
 import brownie
-from eth_abi import encode_single, encode_abi
-from brownie.convert import to_bytes
-from eth_abi.packed import encode_abi_packed
 import pytest
 import eth_utils
+from OptV3.useful_methods import deposit, sleep, close
+from weiroll import WeirollPlanner, WeirollContract
 
 
 def test_yswap(
-    chain, accounts, token, pluggedVaultUsdc, pluggedStrategyUsdc, user, strategist, amount, RELATIVE_APPROX,
-    usdc, whaleUsdc, trade_factory, router, ymechs_safe, multicall_swapper, gov
+    chain, pluggedVaultUsdc, pluggedStrategyUsdc, v3PluginUsdc, strategist,
+    usdc, whaleUsdc, trade_factory, router, gov, op, rando
 ):
     # Deposit to the vault
+    plugin = v3PluginUsdc
     strategy = pluggedStrategyUsdc
     vault = pluggedVaultUsdc
+    token = usdc
+    user = whaleUsdc
     user_balance_before = token.balanceOf(user)
-    token.approve(vault.address, amount, {"from": user})
-    vault.deposit(amount, {"from": user})
-    assert token.balanceOf(vault.address) == amount
+    amount = 10_000e6
+    deposit(amount, user, usdc, vault)
 
     # harvest
     chain.sleep(1)
     chain.mine(1)
     strategy.harvest({"from": strategist})
-    assert pytest.approx(strategy.estimatedTotalAssets(), rel=RELATIVE_APPROX) == amount
+    assert close(plugin.nav(), amount)
 
+    #sleep(chain, 3600)
+    chain.sleep(3600)
+    chain.mine(1)
 
-    usdc.transfer(strategy, 100e6, {"from": whaleUsdc})
+    with reverts():
+        plugin.setTradeFactory(trade_factory, {"from": rando})
 
-    token_in = usdc
+    assert plugin.tradeFactory() == ZERO_ADDRESS
+    plugin.setTradeFactory(trade_factory, {"from": gov})
+    assert plugin.tradeFactory() == trade_factory
+
+    assert plugin.harvestTrigger("1") == True
+
+    plugin.harvest({"from": gov})
+
+    token_in = op
     token_out = token
 
     print(f"Executing trade...")
-    receiver = strategy.address
-    amount_in = token_in.balanceOf(strategy)
+    receiver = plugin.address
+    amount_in = token_in.balanceOf(plugin.address)
+    assert amount_in > 0
 
-    asyncTradeExecutionDetails = [strategy, token_in, token_out, amount_in, 1]
+    router = WeirollContract.createContract(Contract(plugin.router()))
+    receiver = plugin
+    token_out = token
 
-        # always start with optimizations. 5 is CallOnlyNoValue
-    optimizations = [["uint8"], [5]]
-    a = optimizations[0]
-    b = optimizations[1]
+    planner = WeirollPlanner(trade_factory)
+    token_in = WeirollContract.createContract(token_in)
 
-    calldata = token_in.approve.encode_input(router, amount_in)
-    t = createTx(token_in, calldata)
-    a = a + t[0]
-    b = b + t[1]
+    #token_bal_before = token.balanceOf(plugin)
 
-    path = [token_in.address, token_out.address]
-    calldata = router.swapExactTokensForTokens.encode_input(
-        amount_in, 0, path, multicall_swapper, 2 ** 256 - 1
+    route = []
+    if token.symbol() == "WETH" or token.symbol() == "USDC":
+        route = [(token_in.address, token.address, False)]
+    elif token.symbol() == "DAI":
+        route = [
+            (token_in.address, usdc.address, False),
+            (usdc.address, token.address, True),
+        ]
+    else:
+        pytest.skip("Unknown path")
+
+    planner.add(
+        token_in.transferFrom(
+            plugin.address,
+            trade_factory.address,
+            amount_in,
+        )
     )
-    t = createTx(router, calldata)
-    a = a + t[0]
-    b = b + t[1]
 
-    expectedOut = router.getAmountsOut(amount_in, path)[1]
-
-    calldata = token_out.transfer.encode_input(receiver, expectedOut)
-    t = createTx(token_out, calldata)
-    a = a + t[0]
-    b = b + t[1]
-
-    transaction = encode_abi_packed(a, b)
-
-    # min out must be at least 1 to ensure that the tx works correctly
-    #trade_factory.execute["uint256, address, uint, bytes"](
-    #    multicall_swapper.address, 1, transaction, {"from": ymechs_safe}
-    #)
-    trade_factory.execute['tuple,address,bytes'](asyncTradeExecutionDetails,
-        multicall_swapper.address, transaction, {"from": ymechs_safe}
+    planner.add(
+        token_in.approve(
+            router.address,
+            amount_in
+        )
     )
-    print(token_out.balanceOf(strategy))
+
+    planner.add(
+        router.swapExactTokensForTokens(
+            amount_in,
+            0,
+            route,
+            receiver.address,
+            2**256 - 1
+        )
+    )
+
+    cmds, state = planner.plan()
+    trade_factory.execute(cmds, state, {"from": trade_factory.governance()})
+    afterBal = token_out.balanceOf(plugin)
+    print(token_out.balanceOf(plugin))
+
+    assert afterBal > 0
+    assert op.balanceOf(plugin.address) == 0
+
+    strategy.setWithdrawalThreshold(0, {"from":strategist})
 
     tx = strategy.harvest({"from": strategist})
     print(tx.events)
-    assert tx.events["Harvested"]["profit"] > 0
+    assert tx.events["Harvested"]["profit"] >= afterBal
 
-    vault.updateStrategyDebtRatio(strategy, 0, {'from': gov})
-    strategy.harvest({'from': strategist})
+    plugin.removeTradeFactoryPermissions({"from": gov})
+    assert plugin.tradeFactory() == ZERO_ADDRESS
+    assert op.allowance(plugin.address, trade_factory.address) == 0
 
-    strategy.tend()
+    # withdrawal
+    vault.withdraw({"from": user})
+    assert (
+        close(token.balanceOf(user), user_balance_before)
+        or token.balanceOf(user) > user_balance_before
+    )
 
-    strategy.harvest({'from': strategist})
-
-    assert token.balanceOf(vault) > amount
-    assert strategy.estimatedTotalAssets() == 0
-
-
-def createTx(to, data):
-    inBytes = eth_utils.to_bytes(hexstr=data)
-    return [["address", "uint256", "bytes"], [to.address, len(inBytes), inBytes]]
-
-def test_remove_trade_factory(
-    strategy, gov, trade_factory, usdc
-):
-    assert strategy.tradeFactory() == trade_factory.address
-    assert usdc.allowance(strategy.address, trade_factory.address) > 0
-
-    strategy.removeTradeFactoryPermissions({'from': gov})
-
-    assert strategy.tradeFactory() != trade_factory.address
-    assert usdc.allowance(strategy.address, trade_factory.address) == 0
-
-# unable to test updateTradeFactory because there aren't two trade factories deployed
-
-def test_harvest_reverts_without_trade_factory(
-    Strategy, vault, strategist, keeper, gov, token, user, amount, chain
-):
-    strategy = strategist.deploy(Strategy, vault)
-    strategy.setKeeper(keeper, {"from": gov})
-    vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
-
-    # Deposit to the vault
-    user_balance_before = token.balanceOf(user)
-    token.approve(vault.address, amount, {"from": user})
-    vault.deposit(amount, {"from": user})
-    assert token.balanceOf(vault.address) == amount
-
-    # harvest
-    chain.sleep(1)
-
-
-    with brownie.reverts("Trade factory must be set."):
-        strategy.harvest()
