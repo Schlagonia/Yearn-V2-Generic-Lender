@@ -1,4 +1,3 @@
-import py
 import pytest
 from brownie import Wei, config, Contract
 
@@ -212,3 +211,7 @@ def pluggedVaultUsdc(
     vaultUsdc.addStrategy(pluggedStrategyUsdc, 10_000, 0, 2 ** 256 - 1, 1_000, {"from":gov})
     pluggedVaultUsdc = vaultUsdc
     yield pluggedVaultUsdc
+
+@pytest.fixture
+def trade_factory():
+    yield Contract("0x21d7B09Bcf08F7b6b872BED56cB32416AE70bCC8")

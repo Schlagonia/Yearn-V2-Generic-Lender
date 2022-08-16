@@ -84,7 +84,7 @@ contract GenericAaveV3 is GenericLenderBase {
 
     bool public isIncentivised;
     //Amount to multiply callcost by in harvestTrigger
-    uint256 profitFactor;
+    uint256 public profitFactor;
 
     // Used to assure we stop infinite while loops
     //Should never be more reward tokens than 5
@@ -617,7 +617,7 @@ contract GenericAaveV3 is GenericLenderBase {
 
     modifier keepers() {
         require(
-            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).management(),
+            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
             "!keepers"
         );
         _;
