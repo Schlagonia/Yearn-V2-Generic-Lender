@@ -1,1 +1,2 @@
 weiroll-py==0.1.0
+eth_brownie==1.19

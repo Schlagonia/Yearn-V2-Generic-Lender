@@ -19,7 +19,7 @@ gov = "0xea3a15df68fCdBE44Fdb0DB675B2b3A14a148b26"
 rewards = "0x84654e35E504452769757AAe5a8C7C6599cBf954"
 registry = Contract("0x1ba4eB0F44AB82541E56669e18972b0d6037dfE0")
 vault = Vault.at("0xAcB84e988327D7ACc843d6f1389f99f5f864529a")
-strategy = None
+strategy = OptStrategy.at("0x2e98053f4A1b2595bfaA4d0Ad0a450F8DEb8BBCC") #None
 
 param = { "from": acct}
 
@@ -89,7 +89,7 @@ def deploy_v3():
     router = "0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9" #Veledrome
     router2 = "0x0000000000000000000000000000000000000000" #
     name = "AaveV3GenLender"
-    
+    """
     v3 = GenericAaveV3.deploy(
         strategy.address,
         token, #Wnative is want
@@ -100,10 +100,12 @@ def deploy_v3():
         param,
         publish_source=True
     )
-
+    """
+    v3 = GenericAaveV3.at("0x4806cf1caD561AC271F64dA86423Ea06255E4e06")
     print(f"V3 deployed to {v3.address}")
-
-    strategy.addLender(v3.address, param)
+   
+    GenericAaveV3.publish_source(v3)
+    #strategy.addLender(v3.address, param)
 
 def main():
     #print(project.load(yearnDep))
@@ -113,5 +115,5 @@ def main():
     
     print("Deploying")
     #clone_vault()
-    clone_strat()
+    #clone_strat()
     deploy_v3()

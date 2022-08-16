@@ -364,6 +364,8 @@ interface IBaseStrategy {
     function harvest() external;
 
     function management() external view returns (address);
+    
+    function strategist() external view returns(address);
 }
 
 // Part: IGenericLender
@@ -3017,7 +3019,7 @@ abstract contract GenericLenderBase is IGenericLender {
 
     modifier management() {
         require(
-            msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).management(),
+            msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
             "!management"
         );
         _;
@@ -3157,11 +3159,11 @@ contract GenericAaveV3 is GenericLenderBase {
 
     bool public isIncentivised;
     //Amount to multiply callcost by in harvestTrigger
-    uint256 profitFactor;
+    uint256 public profitFactor;
 
     // Used to assure we stop infinite while loops
     //Should never be more reward tokens than 5
-    uint256 public maxLoops = 5;
+    uint256 public constant maxLoops = 5;
 
     uint16 internal constant DEFAULT_REFERRAL = 7; 
     uint16 internal customReferral;
@@ -3171,6 +3173,12 @@ contract GenericAaveV3 is GenericLenderBase {
     ***/
     //Wrapped native token for chain i.e. WETH
     address public WNATIVE;
+    //USDC for the middle of swaps
+    address internal constant usdc = 0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
+    //Asset to use for swap as the middle
+    address public middleSwapToken;
+    //stable bool should be true if we are using usdc as the middle token and want is a stable coin
+    bool public stable;
     ///For Optimism we will only be using the Veledrome router \\\\
     address public baseRouter;
     address public secondRouter;
@@ -3236,6 +3244,9 @@ contract GenericAaveV3 is GenericLenderBase {
 
         IERC20(address(want)).safeApprove(address(_lendingPool()), type(uint256).max);
 
+        //Default to USDC due to Veledrome liquidity
+        middleSwapToken = usdc;
+    
         //Set Chain Specific Addresses
         WNATIVE = _wNative;
         baseRouter = _baseRouter;
@@ -3479,7 +3490,7 @@ contract GenericAaveV3 is GenericLenderBase {
             } else if(token == address(stkAave)) {
                 expectedRewards += _checkPrice(AAVE, WNATIVE, rewards[i]);
             } else {
-                expectedRewards += _checkPrice(tokens[i], WNATIVE, rewards[i]);
+                expectedRewards += _checkPrice(token, WNATIVE, rewards[i]);
             }
         }
         
@@ -3629,9 +3640,8 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (IVeledrome.route[] memory _path) {
-        bool isNative = _tokenIn == WNATIVE || _tokenOut == WNATIVE;
+        bool isNative = _tokenIn == middleSwapToken || _tokenOut == middleSwapToken;
         _path = new IVeledrome.route[](isNative ? 1 : 2);
-        //_path[0] = _tokenIn;
 
         if (isNative) {
             _path[0] = IVeledrome.route(
@@ -3642,15 +3652,23 @@ contract GenericAaveV3 is GenericLenderBase {
         } else {
             _path[0] = IVeledrome.route(
                 _tokenIn,
-                WNATIVE,
+                middleSwapToken,
                 false
             );
             _path[1] = IVeledrome.route(
-                WNATIVE,
+                middleSwapToken,
                 _tokenOut,
-                false
+                stable
             );
         }
+    }
+
+    //External function to change the token we use for swaps and the bool for the second route in path
+    //Can only change to either the native or USDC.
+    function setMiddleSwapToken(address _middleSwapToken, bool _stable) external management {
+        require(_middleSwapToken == WNATIVE || _middleSwapToken == usdc);
+        middleSwapToken = _middleSwapToken;
+        stable = _stable;
     }
 
     function _lendingPool() internal view returns (IPool lendingPool) {
@@ -3674,7 +3692,7 @@ contract GenericAaveV3 is GenericLenderBase {
 
     modifier keepers() {
         require(
-            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).management(),
+            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
             "!keepers"
         );
         _;
