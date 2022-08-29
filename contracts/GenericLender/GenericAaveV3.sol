@@ -64,10 +64,12 @@ contract GenericAaveV3 is GenericLenderBase {
     address public keep3r;
 
     bool public isIncentivised;
+    //Amount to multiply callcost by in harvestTrigger
+    uint256 public profitFactor;
 
     // Used to assure we stop infinite while loops
     //Should never be more reward tokens than 5
-    uint256 public maxLoops = 5;
+    uint256 public constant maxLoops = 5;
 
     uint16 internal constant DEFAULT_REFERRAL = 7; 
     uint16 internal customReferral;
@@ -143,6 +145,7 @@ contract GenericAaveV3 is GenericLenderBase {
         WNATIVE = _wNative;
         baseRouter = _baseRouter;
         secondRouter = _secondRouter;
+        profitFactor = 100;
         router = IUniswapV2Router02(_baseRouter);
     }
 
@@ -170,6 +173,10 @@ contract GenericAaveV3 is GenericLenderBase {
 
     function setKeep3r(address _keep3r) external management {
         keep3r = _keep3r;
+    }
+
+    function setProfitFactor(uint256 _profitFactor) external management {
+        profitFactor = _profitFactor;
     }
 
     function deposit() external override management {
@@ -371,16 +378,16 @@ contract GenericAaveV3 is GenericLenderBase {
         for(uint256 i = 0; i < rewards.length; i ++) {
 
             address token = tokens[i];
-            if(token == address(want)){
+            if(token == WNATIVE){
                 expectedRewards += rewards[i];
             } else if(token == address(stkAave)) {
-                expectedRewards += _checkPrice(AAVE, address(want), rewards[i]);
+                expectedRewards += _checkPrice(AAVE, WNATIVE, rewards[i]);
             } else {
-                expectedRewards += _checkPrice(tokens[i], address(want), rewards[i]);
+                expectedRewards += _checkPrice(token, WNATIVE, rewards[i]);
             }
         }
         
-        return expectedRewards >= callcost;
+        return expectedRewards >= callcost.mul(profitFactor);
     }
 
     function _nav() internal view returns (uint256) {
@@ -561,7 +568,7 @@ contract GenericAaveV3 is GenericLenderBase {
 
     modifier keepers() {
         require(
-            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).management(),
+            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
             "!keepers"
         );
         _;

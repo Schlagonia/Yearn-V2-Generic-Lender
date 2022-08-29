@@ -25,6 +25,8 @@ interface IBaseStrategy {
 
     function harvest() external;
 
+    function strategist() external view returns(address);
+
     function management() external view returns (address);
 }
 
@@ -90,7 +92,7 @@ abstract contract GenericLenderBase is IGenericLender {
 
     modifier management() {
         require(
-            msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).management(),
+            msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
             "!management"
         );
         _;
