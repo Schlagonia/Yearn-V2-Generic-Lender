@@ -27,7 +27,7 @@ def gov(accounts):
 
 @pytest.fixture
 def whale(accounts):
-    yield accounts.at("0xc94A3Ff0bac12eeB9ff0CC4e08511E1FFaD6ba94", force=True)
+    yield accounts.at("0x431e81e5dfb5a24541b5ff8762bdef3f32f96354", force=True)
 
 @pytest.fixture
 def rewards(gov):
