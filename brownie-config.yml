@@ -2,8 +2,7 @@
 # NOTE: The V3 tests file can be run on a ftm-main-fork with current addresses built in
 #   However, currently AVAx is the only one with incentives so the V3Rewards tests should be run on an AVAX fork
 networks:
-  default: ftm-main-fork
-  #default: avax-main-fork
+  default: mainnet-fork
 
 # automatically fetch contract sources from Etherscan
 autofetch_sources: True
