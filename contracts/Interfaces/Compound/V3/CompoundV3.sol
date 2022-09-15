@@ -82,6 +82,7 @@ interface Comet is IERC20 {
   function totalBorrow() external view returns (uint256);
 
   function baseIndexScale() external pure returns (uint64);
+  function baseTrackingAccrued(address account) external view returns (uint64);
 
   function totalsCollateral(address asset) external view returns (CometStructs.TotalsCollateral memory);
 

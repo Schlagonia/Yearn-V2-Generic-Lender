@@ -2,44 +2,55 @@
 pragma solidity >=0.6.12;
 pragma experimental ABIEncoderV2;
 
-import "../Interfaces/Compound/InterestRateModel.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+
 import {CometStructs} from "../Interfaces/Compound/V3/CompoundV3.sol";
 import {Comet} from "../Interfaces/Compound/V3/CompoundV3.sol";
 import {CometRewards} from "../Interfaces/Compound/V3/CompoundV3.sol";
-
+import {ITradeFactory} from "../Interfaces/ySwaps/ITradeFactory.sol";
 import "../Interfaces/UniswapInterfaces/IUniswapV2Router02.sol";
 
 import "./GenericLenderBase.sol";
 
 /********************
- *   A lender plugin for LenderYieldOptimiser for any erc20 asset on compound (not eth)
- *   Made by SamPriestley.com
- *   https://github.com/Grandthrax/yearnv2/blob/master/contracts/GenericDyDx/GenericCompound.sol
+ *   A lender plugin for LenderYieldOptimiser for any borrowable erc20 asset on compoundV3 (not eth)
+ *   Made by @Schlagonia
+ *   https://github.com/Schlagonia/Yearn-V2-Generic-Lender/blob/main/contracts/GenericLender/GenericCompoundV3.sol
  *
  ********************* */
+
+interface IBaseFee {
+    function isCurrentBaseFeeAcceptable() external view returns (bool);
+}
 
 contract GenericCompoundV3 is GenericLenderBase {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
-    uint constant public DAYS_PER_YEAR = 365;
-    uint constant public SECONDS_PER_DAY = 60 * 60 * 24;
-    uint private constant SECONDS_PER_YEAR = 365 days;
-    address public constant uniswapRouter = address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
-    address public constant comp = address(0xc00e94Cb662C3520282E6f5717214004A7f26888);
-    address public constant weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+    //For apr calculations
+    uint internal constant DAYS_PER_YEAR = 365;
+    uint internal constant SECONDS_PER_DAY = 60 * 60 * 24;
+    uint internal constant SECONDS_PER_YEAR = 365 days;
+
+    //Rewards stuff
+    address public constant uniswapRouter = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
+    address public tradeFactory;
+    address public constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
+    address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     Comet public comet;
+    CometRewards public constant rewardsContract = 
+        CometRewards(0x1B0e765F6224C21223AeA2af16c1C46E38885a40); 
 
     uint public BASE_MANTISSA;
     uint public BASE_INDEX_SCALE;
 
-    uint256 public constant minCompToSell = 0.05 ether;
+    uint256 public minCompToSell;
+    uint256 public minRewardToHarvest;
     address public keep3r;
 
     constructor(
@@ -63,6 +74,9 @@ contract GenericCompoundV3 is GenericLenderBase {
         BASE_INDEX_SCALE = comet.baseIndexScale();
 
         want.safeApprove(_comet, uint256(-1));
+
+        minCompToSell = 0.05 ether;
+        minRewardToHarvest = 10 ether;
     }
 
     function cloneCompoundV3Lender(
@@ -72,6 +86,11 @@ contract GenericCompoundV3 is GenericLenderBase {
     ) external returns (address newLender) {
         newLender = _clone(_strategy, _name);
         GenericCompoundV3(newLender).initialize(_comet);
+    }
+
+    function setRewardStuff(uint256 _minCompToSell, uint256 _minRewardToHavest) external management {
+        minCompToSell = _minCompToSell;
+        minRewardToHarvest = _minRewardToHavest;
     }
 
     function setKeep3r(address _keep3r) external management {
@@ -101,12 +120,12 @@ contract GenericCompoundV3 is GenericLenderBase {
         return uint256(supplyRate.add(rewardRate));
     }
 
-     /*
-   * Get the current reward for supplying APR in Compound III
-   * @param rewardTokenPriceFeed The address of the reward token (e.g. COMP) price feed
-   * @param newAmount Any amount that will be added to the total supply in a deposit
-   * @return The reward APR in USD as a decimal scaled up by 1e18
-   */
+    /*
+    * Get the current reward for supplying APR in Compound III
+    * @param rewardTokenPriceFeed The address of the reward token (e.g. COMP) price feed
+    * @param newAmount Any amount that will be added to the total supply in a deposit
+    * @return The reward APR in USD as a decimal scaled up by 1e18
+    */
     function getRewardAprForSupplyBase(address rewardTokenPriceFeed, uint newAmount) public view returns (uint) {
         uint rewardTokenPriceInUsd = getCompoundPrice(rewardTokenPriceFeed);
         uint wantPriceInUsd = getCompoundPrice(comet.baseTokenPriceFeed());
@@ -173,30 +192,70 @@ contract GenericCompoundV3 is GenericLenderBase {
                 comet.withdraw(address(want), liquidity);
             }
         }
-        //_disposeOfComp();
         looseBalance = want.balanceOf(address(this));
         want.safeTransfer(address(strategy), looseBalance);
         return looseBalance;
     }
 
     function harvest() external keepers {
+        claimCometRewards();
 
+        _disposeOfComp();
+
+        uint256 wantBalance = want.balanceOf(address(this));
+        if(wantBalance > 0) {
+            comet.supply(address(want), wantBalance);
+        }
     }
 
-    function harvestTrigger(uint256 callCost) external view returns(bool) {
+    function harvestTrigger(uint256 /*callCost*/) external view returns(bool) {
+        if(!isBaseFeeAcceptable()) return false;
 
+        if(getRewardsOwed() >= minRewardToHarvest) return true;
     }
 
-    function _disposeOfComp() internal {
+    /*
+    * Gets the amount of reward tokens due to this contract address
+    */
+    function getRewardsOwed() public view returns (uint) {
+        return comet.userBasic(address(this)).baseTrackingAccrued;
+    }
+
+    /*
+    * Claims the reward tokens due to this contract address
+    */
+    function claimCometRewards() internal {
+        rewardsContract.claim(address(comet), address(this), true);
+    }
+
+    function _disposeOfComp() internal { //Need to add an approve statement somewhere
+        //check for Trade Factory implementation
+        if(tradeFactory != address(0)) return;
+
         uint256 _comp = IERC20(comp).balanceOf(address(this));
 
         if (_comp > minCompToSell) {
-            address[] memory path = new address[](3);
-            path[0] = comp;
-            path[1] = weth;
-            path[2] = address(want);
 
-            IUniswapV2Router02(uniswapRouter).swapExactTokensForTokens(_comp, uint256(0), path, address(this), now);
+            IUniswapV2Router02(uniswapRouter).swapExactTokensForTokens(
+                _comp, 
+                uint256(0), 
+                getTokenOutPath(comp, address(want)), 
+                address(this), 
+                now
+            );
+        }
+    }
+
+    function getTokenOutPath(address _tokenIn, address _tokenOut) internal pure returns (address[] memory _path) {
+        bool isNative = _tokenIn == weth || _tokenOut == weth;
+        _path = new address[](isNative ? 2 : 3);
+        _path[0] = _tokenIn;
+
+        if (isNative) {
+            _path[1] = _tokenOut;
+        } else {
+            _path[1] = weth;
+            _path[2] = _tokenOut;
         }
     }
 
@@ -215,11 +274,11 @@ contract GenericCompoundV3 is GenericLenderBase {
         return comet.balanceOf(address(this)) > 0 || want.balanceOf(address(this)) > 0;
     }
 
-    function aprAfterDeposit(uint256 amount) external view override returns (uint256) { // Add reward apr
+    function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
         uint256 borrows = comet.totalBorrow();
         uint256 supply = comet.totalSupply();
 
-        uint256 newUtilization = borrows.mul(BASE_MANTISSA).div(supply.add(amount));
+        uint256 newUtilization = borrows.mul(1e18).div(supply.add(amount));
         uint256 newSupply = comet.getSupplyRate(newUtilization) * SECONDS_PER_YEAR;
 
         uint256 newReward = getRewardAprForSupplyBase(getPriceFeedAddress(comp), amount);
@@ -241,5 +300,35 @@ contract GenericCompoundV3 is GenericLenderBase {
         );
         _;
     }
-    //Trade Factory functions
+
+    // check if the current baseFee is below our external target
+    function isBaseFeeAcceptable() internal view returns (bool) {
+        return
+            IBaseFee(0xb5e1CAcB567d98faaDB60a1fD4820720141f064F)
+                .isCurrentBaseFeeAcceptable();
+    }
+   
+    // ---------------------- YSWAPS FUNCTIONS ----------------------
+    function setTradeFactory(address _tradeFactory) external onlyGovernance {
+        if (tradeFactory != address(0)) {
+            _removeTradeFactoryPermissions();
+        }
+
+        ITradeFactory tf = ITradeFactory(_tradeFactory);
+
+        IERC20(comp).safeApprove(_tradeFactory, type(uint256).max);
+        tf.enable(comp, address(want));
+        
+        tradeFactory = _tradeFactory;
+    }
+
+    function removeTradeFactoryPermissions() external management {
+        _removeTradeFactoryPermissions();
+    }
+
+    function _removeTradeFactoryPermissions() internal {
+        IERC20(comp).safeApprove(tradeFactory, 0);
+        
+        tradeFactory = address(0);
+    }
 }

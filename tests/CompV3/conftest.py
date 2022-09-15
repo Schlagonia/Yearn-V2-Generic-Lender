@@ -122,7 +122,7 @@ def cdai(interface):
 
 @pytest.fixture
 def cUsdc(interface):
-    yield interface.CErc20I("0xc3d688B66703497DAA19211EEdff47f25384cdc3")
+    yield interface.Comet("0xc3d688B66703497DAA19211EEdff47f25384cdc3")
 
 
 @pytest.fixture
