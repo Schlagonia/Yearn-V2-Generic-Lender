@@ -11,7 +11,7 @@ import {CometStructs} from "../Interfaces/Compound/V3/CompoundV3.sol";
 import {Comet} from "../Interfaces/Compound/V3/CompoundV3.sol";
 import {CometRewards} from "../Interfaces/Compound/V3/CompoundV3.sol";
 import {ITradeFactory} from "../Interfaces/ySwaps/ITradeFactory.sol";
-import "../Interfaces/UniswapInterfaces/IUniswapV2Router02.sol";
+import {ISwapRouter} from "../Interfaces/UniswapInterfaces/V3/ISwapRouter.sol";
 
 import "./GenericLenderBase.sol";
 
@@ -37,10 +37,17 @@ contract GenericCompoundV3 is GenericLenderBase {
     uint internal constant SECONDS_PER_YEAR = 365 days;
 
     //Rewards stuff
-    address public constant uniswapRouter = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
+    // Uniswap v3 router
+    ISwapRouter internal constant router =
+        ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+    //Fees for the V3 pools if the supply is incentivized
+    uint24 public compToEthFee;
+    uint24 public ethToWantFee;
+    address public constant comp = 
+        0xc00e94Cb662C3520282E6f5717214004A7f26888;
+    address public constant weth = 
+        0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address public tradeFactory;
-    address public constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
-    address public constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     Comet public comet;
     CometRewards public constant rewardsContract = 
@@ -73,7 +80,8 @@ contract GenericCompoundV3 is GenericLenderBase {
         BASE_MANTISSA = comet.baseScale();
         BASE_INDEX_SCALE = comet.baseIndexScale();
 
-        want.safeApprove(_comet, uint256(-1));
+        want.safeApprove(_comet, type(uint256).max);
+        IERC20(comp).safeApprove(address(router), type(uint256).max);
 
         minCompToSell = 0.05 ether;
         minRewardToHarvest = 10 ether;
@@ -91,6 +99,13 @@ contract GenericCompoundV3 is GenericLenderBase {
     function setRewardStuff(uint256 _minCompToSell, uint256 _minRewardToHavest) external management {
         minCompToSell = _minCompToSell;
         minRewardToHarvest = _minRewardToHavest;
+    }
+
+    //These will default to 0.
+    //Will need to be manually set if want is incentized before any harvests
+    function setUniFees(uint24 _compToEth, uint24 _ethToWant) external management {
+        compToEthFee = _compToEth;
+        ethToWantFee = _ethToWant;
     }
 
     function setKeep3r(address _keep3r) external management {
@@ -211,9 +226,9 @@ contract GenericCompoundV3 is GenericLenderBase {
     function harvestTrigger(uint256 /*callCost*/) external view returns(bool) {
         if(!isBaseFeeAcceptable()) return false;
 
-        if(getRewardsOwed() >= minRewardToHarvest) return true;
+        if(getRewardsOwed().add(IERC20(comp).balanceOf(address(this))) >= minRewardToHarvest) return true;
     }
-
+    
     /*
     * Gets the amount of reward tokens due to this contract address
     */
@@ -228,7 +243,7 @@ contract GenericCompoundV3 is GenericLenderBase {
         rewardsContract.claim(address(comet), address(this), true);
     }
 
-    function _disposeOfComp() internal { //Need to add an approve statement somewhere
+    function _disposeOfComp() internal {
         //check for Trade Factory implementation
         if(tradeFactory != address(0)) return;
 
@@ -236,26 +251,43 @@ contract GenericCompoundV3 is GenericLenderBase {
 
         if (_comp > minCompToSell) {
 
-            IUniswapV2Router02(uniswapRouter).swapExactTokensForTokens(
-                _comp, 
-                uint256(0), 
-                getTokenOutPath(comp, address(want)), 
-                address(this), 
-                now
-            );
-        }
-    }
+            if(address(want) == weth) {
+                ISwapRouter.ExactInputSingleParams memory params =
+                    ISwapRouter.ExactInputSingleParams(
+                        comp, // tokenIn
+                        address(want), // tokenOut
+                        compToEthFee, // comp-eth fee
+                        address(this), // recipient
+                        now, // deadline
+                        _comp, // amountIn
+                        0, // amountOut
+                        0 // sqrtPriceLimitX96
+                    );
 
-    function getTokenOutPath(address _tokenIn, address _tokenOut) internal pure returns (address[] memory _path) {
-        bool isNative = _tokenIn == weth || _tokenOut == weth;
-        _path = new address[](isNative ? 2 : 3);
-        _path[0] = _tokenIn;
+                router.exactInputSingle(params);
+            
+            } else {
+                bytes memory path =
+                    abi.encodePacked(
+                        comp, // comp-ETH
+                        compToEthFee,
+                        weth, // ETH-want
+                        ethToWantFee,
+                        address(want)
+                    );
 
-        if (isNative) {
-            _path[1] = _tokenOut;
-        } else {
-            _path[1] = weth;
-            _path[2] = _tokenOut;
+                // Proceeds from Comp are not subject to minExpectedSwapPercentage
+                // so they could get sandwiched if we end up in an uncle block
+                router.exactInput(
+                    ISwapRouter.ExactInputParams(
+                        path,
+                        address(this),
+                        now,
+                        _comp,
+                        0
+                    )
+                );
+            }
         }
     }
 

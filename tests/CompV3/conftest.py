@@ -98,6 +98,14 @@ def keeper(accounts):
 def rando(accounts):
     yield accounts[9]
 
+@pytest.fixture
+def gasOracle():
+    yield Contract("0xb5e1CAcB567d98faaDB60a1fD4820720141f064F")
+
+@pytest.fixture
+def strategist_ms(accounts):
+        # like governance, but better
+    yield accounts.at("0x16388463d60FFE0661Cf7F1f31a7D658aC790ff7", force=True)
 
 # specific addresses
 @pytest.fixture

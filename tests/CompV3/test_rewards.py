@@ -14,102 +14,75 @@ def test_aave_rewards(chain,
     vault,
     Strategy,
     strategy,
-    GenericAave,
-    aUsdc):
-    # Clone magic
-    tx = strategy.clone(vault)
-    cloned_strategy = Strategy.at(tx.return_value)
-    cloned_strategy.setWithdrawalThreshold(
-        strategy.withdrawalThreshold(), {"from": gov}
-    )
-    cloned_strategy.setDebtThreshold(strategy.debtThreshold(), {"from": gov})
-    cloned_strategy.setProfitFactor(strategy.profitFactor(), {"from": gov})
-    cloned_strategy.setMaxReportDelay(strategy.maxReportDelay(), {"from": gov})
+    interface,
+    GenericCompoundV3,
+    gasOracle,
+    strategist_ms,
+    cUsdc):
 
-    assert cloned_strategy.numLenders() == 0
-
-    # Clone the aave lender
-    original_aave = GenericAave.at(strategy.lenders(strategy.numLenders() - 1))
-    tx = original_aave.cloneAaveLender(
-        cloned_strategy, "ClonedAaveUSDC", aUsdc, False, {"from": gov}
-    )
-    cloned_lender = GenericAave.at(tx.return_value)
-    assert cloned_lender.lenderName() == "ClonedAaveUSDC"
-
-    cloned_strategy.addLender(cloned_lender, {"from": gov})
     starting_balance = usdc.balanceOf(strategist)
     currency = usdc
     decimals = currency.decimals()
+    plugin = GenericCompoundV3.at(strategy.lenders(0))
+    gasOracle.setMaxAcceptableBaseFee(10000 * 1e9, {"from": strategist_ms})
 
     usdc.approve(vault, 2 ** 256 - 1, {"from": whale})
     usdc.approve(vault, 2 ** 256 - 1, {"from": strategist})
 
     deposit_limit = 1_000_000_000 * (10 ** (decimals))
     debt_ratio = 10_000
-    vault.addStrategy(cloned_strategy, debt_ratio, 0, 2 ** 256 - 1, 500, {"from": gov})
+    vault.addStrategy(strategy, debt_ratio, 0, 2 ** 256 - 1, 500, {"from": gov})
     vault.setDepositLimit(deposit_limit, {"from": gov})
 
     assert deposit_limit == vault.depositLimit()
-
-    # ------------------ set up proposal ------------------
-
-    # chain.sleep(12 * 3600) # to be able to execute
-    # chain.mine(1)
-    # print("executing proposal 11") # to be able to test before the proposal is executed
-    # executor = Contract.from_abi("AaveGovernanceV2", "0xec568fffba86c094cf06b22134b23074dfe2252c", executor_abi, owner="0x30fe242a69d7694a931791429815db792e24cf97")
-    # tx = executor.execute(11)
-
-    incentives_controller = Contract(aUsdc.getIncentivesController())
-    assert incentives_controller.getDistributionEnd() > 0
-    # ------------------ test starts ------------------
-    # turning on claiming incentives logic
-    cloned_lender.setIsIncentivised(True, {'from': strategist})
-
     # our humble strategist deposits some test funds
-    depositAmount = 50000 * (10 ** (decimals))
+    depositAmount = 501 * (10 ** (decimals))
     vault.deposit(depositAmount, {"from": strategist})
 
-    assert cloned_strategy.estimatedTotalAssets() == 0
+    assert strategy.estimatedTotalAssets() == 0
     chain.mine(1)
-    assert cloned_strategy.harvestTrigger(1) == True
+    assert strategy.harvestTrigger(1) == True
 
-    cloned_strategy.harvest({"from": strategist})
+    strategy.harvest({"from": strategist})
+    assert plugin.harvestTrigger(10) == False
 
     assert (
-        cloned_strategy.estimatedTotalAssets() >= depositAmount * 0.999999
+        strategy.estimatedTotalAssets() >= depositAmount * 0.999999
     )  # losing some dust is ok
 
-    assert cloned_strategy.harvestTrigger(1) == False
-    
-    assert cloned_lender.harvestTrigger(1) == True # first harvest
-    
-    with brownie.reverts():## should fail for any non-management account
-        cloned_lender.harvest({'from': whale})
+    assert strategy.harvestTrigger(1) == False
+    assert plugin.harvestTrigger(10) == False
 
-    with brownie.reverts(): ## not in management so should revert
-        cloned_lender.setKeep3r(whale, {'from': whale})
+    # whale deposits as well
+    whale_deposit = 100_000 * (10 ** (decimals))
+    vault.deposit(whale_deposit, {"from": whale})
+    assert strategy.harvestTrigger(1000) == True
+    assert plugin.harvestTrigger(10) == False
+    strategy.harvest({"from": strategist})
 
-    cloned_lender.setKeep3r(whale, {'from': strategist})
+    #Set uni fees
+    plugin.setUniFees(3000, 500, {"from": strategist})
 
-    cloned_lender.harvest({'from': whale})
+    #send come comp to the strategy
+    comp = interface.ERC20(plugin.comp())
+    toSend = 10 * (10 **18)
+    comp.transfer(plugin.address, toSend, {"from": whale})
+    assert comp.balanceOf(plugin.address) == toSend     
+    assert plugin.harvestTrigger(10) == True
+    chain.sleep(10)
 
-    assert cloned_lender.harvestTrigger(1) == False
+    before_bal = plugin.underlyingBalanceStored()
 
-    chain.sleep(10*3600*24+1) # we wait 10 days for the cooldown period 
-    chain.mine(1)
+    with brownie.reverts():
+        plugin.harvest({"from": rando})
 
-    assert cloned_lender.harvestTrigger(1) == True
-    assert incentives_controller.getRewardsBalance([aUsdc], cloned_lender) > 0
-    previousBalance = aUsdc.balanceOf(cloned_lender)
-    
-    cloned_lender.harvest({'from': strategist}) # redeem staked tokens, sell them, deposit them, claim rewards
+    plugin.harvest({"from": strategist})
 
-    assert incentives_controller.getRewardsBalance([aUsdc], cloned_lender) == 0
-    assert aUsdc.balanceOf(cloned_lender) > previousBalance # deposit sold rewards
+    assert plugin.underlyingBalanceStored() > before_bal
+    assert comp.balanceOf(plugin.address) == 0
 
-    cloned_strategy.harvest({'from': strategist})
-    
-    status = cloned_strategy.lendStatuses()
+    strategy.harvest({"from": strategist})
+    status = strategy.lendStatuses()
     form = "{:.2%}"
     formS = "{:,.0f}"
     for j in status:
@@ -120,101 +93,130 @@ def test_aave_rewards(chain,
     chain.mine(1)
     vault.withdraw({"from": strategist})
 
-def test_no_emissions(
-    chain,
+def test_no_rewards(
     usdc,
+    Strategy,
+    cUsdc,
+    chain,
     whale,
     gov,
     strategist,
     rando,
     vault,
-    Strategy,
     strategy,
-    GenericAave,
-    aUsdc):
-    # Clone magic
-    vault = Contract("0xa5cA62D95D24A4a350983D5B8ac4EB8638887396")# using SUSD vault (it is not in the LP program)
-    
-    tx = strategy.clone(vault) 
-    cloned_strategy = Strategy.at(tx.return_value)
-    cloned_strategy.setWithdrawalThreshold(
-        strategy.withdrawalThreshold(), {"from": vault.governance()}
-    )
-    cloned_strategy.setDebtThreshold(strategy.debtThreshold(), {"from": vault.governance()})
-    cloned_strategy.setProfitFactor(strategy.profitFactor(), {"from": vault.governance()})
-    cloned_strategy.setMaxReportDelay(strategy.maxReportDelay(), {"from": vault.governance()})
-
-    assert cloned_strategy.numLenders() == 0
-    aSUSD = interface.IAToken("0x6c5024cd4f8a59110119c56f8933403a539555eb")# aSUSD
-    # Clone the aave lender
-    original_aave = GenericAave.at(strategy.lenders(strategy.numLenders() - 1))
-    tx = original_aave.cloneAaveLender(
-        cloned_strategy, "ClonedAaveSUSD", aSUSD, False, {"from": vault.governance()} 
-    )
-    cloned_lender = GenericAave.at(tx.return_value)
-    assert cloned_lender.lenderName() == "ClonedAaveSUSD"
-
-    cloned_strategy.addLender(cloned_lender, {"from": vault.governance()})
-    currency = interface.ERC20("0x57ab1ec28d129707052df4df418d58a2d46d5f51") #sUSD
-    susd_whale = "0x49be88f0fcc3a8393a59d3688480d7d253c37d2a"
-    currency.transfer(strategist, 100e18, {'from': susd_whale})
-    starting_balance = currency.balanceOf(strategist)
-
+    GenericCompoundV3,
+    aUsdc,
+):
+    starting_balance = usdc.balanceOf(strategist)
+    currency = usdc
     decimals = currency.decimals()
+    plugin = GenericCompoundV3.at(strategy.lenders(0))
 
-    currency.approve(vault, 2 ** 256 - 1, {"from": whale})
-    currency.approve(vault, 2 ** 256 - 1, {"from": strategist})
+    usdc.approve(vault, 2 ** 256 - 1, {"from": whale})
+    usdc.approve(vault, 2 ** 256 - 1, {"from": strategist})
 
     deposit_limit = 1_000_000_000 * (10 ** (decimals))
     debt_ratio = 10_000
-    vault.updateStrategyDebtRatio(vault.withdrawalQueue(0), 0, {'from': vault.governance()})
-    vault.updateStrategyDebtRatio(vault.withdrawalQueue(1), 0, {'from': vault.governance()})
-    vault.addStrategy(cloned_strategy, debt_ratio, 0, 2 ** 256 - 1, 500, {"from": vault.governance()})
-    vault.setDepositLimit(deposit_limit, {"from": vault.governance()})
+    vault.addStrategy(strategy, debt_ratio, 0, 2 ** 256 - 1, 500, {"from": gov})
+    vault.setDepositLimit(deposit_limit, {"from": gov})
 
     assert deposit_limit == vault.depositLimit()
-    with brownie.reverts():
-        cloned_lender.setIsIncentivised(True, {'from': strategist})
-    # ------------------ set up proposal ------------------
-
-    # chain.sleep(12 * 3600) # to be able to execute
-    # chain.mine(1)
-    # print("executing proposal 11") # to be able to test before the proposal is executed
-    # executor = Contract.from_abi("AaveGovernanceV2", "0xec568fffba86c094cf06b22134b23074dfe2252c", executor_abi, owner="0x30fe242a69d7694a931791429815db792e24cf97")
-    # tx = executor.execute(11)
-
-    # should fail because sUSD is not incentivised
-    with brownie.reverts():
-        cloned_lender.setIsIncentivised(True, {'from': strategist})
-# our humble strategist deposits some test funds
-    depositAmount = 50 * (10 ** (decimals))
+    # our humble strategist deposits some test funds
+    depositAmount = 501 * (10 ** (decimals))
     vault.deposit(depositAmount, {"from": strategist})
 
-    assert cloned_strategy.estimatedTotalAssets() == 0
+    assert strategy.estimatedTotalAssets() == 0
     chain.mine(1)
-    assert cloned_strategy.harvestTrigger(1) == True
+    assert strategy.harvestTrigger(1) == True
 
-    cloned_strategy.harvest({"from": strategist})
+    strategy.harvest({"from": strategist})
+    assert plugin.harvestTrigger(10) == False
 
     assert (
-        cloned_strategy.estimatedTotalAssets() >= depositAmount * 0.999999
+        strategy.estimatedTotalAssets() >= depositAmount * 0.999999
     )  # losing some dust is ok
 
-    assert cloned_strategy.harvestTrigger(1) == False
-    
-    assert cloned_lender.harvestTrigger(1) == False # harvest is unavailable
-    
+    assert strategy.harvestTrigger(1) == False
+    assert plugin.harvestTrigger(10) == False
+
+    # whale deposits as well
+    whale_deposit = 100_000 * (10 ** (decimals))
+    vault.deposit(whale_deposit, {"from": whale})
+    assert strategy.harvestTrigger(1000) == True
+    assert plugin.harvestTrigger(10) == False
+    strategy.harvest({"from": strategist})
+
+    assert plugin.harvestTrigger(10) == False
+    assert plugin.getRewardsOwed() == 0
+    assert plugin.getRewardAprForSupplyBase(plugin.getPriceFeedAddress(plugin.comp()), 0) == 0
+
+    #should still be able to call harvest
+    plugin.harvest({"from": strategist})
+
+def test_setter_functions(chain,
+    usdc,
+    whale,
+    gov,
+    strategist,
+    GenericCompoundV3,
+    rando,
+    vault,
+    strategy,
+    accounts,
+    cUsdc):
+    #Check original values
+    plugin = GenericCompoundV3.at(strategy.lenders(0))
+
+    assert plugin.keep3r() == "0x0000000000000000000000000000000000000000"
+    assert plugin.minCompToSell() == .05 * (10**18)
+    assert plugin.minRewardToHarvest() == 10 * (10 ** 18)
+    assert plugin.ethToWantFee() == 0
+    assert plugin.compToEthFee() == 0
+
+    compEthFee = 3000
+    ethWantFee = 100
+    minComp = 10**20
+    minReward = 10 ** 5
+
     with brownie.reverts():
-        cloned_lender.harvest({'from': strategist}) # if called, it does not revert
+        plugin.setKeep3r(accounts[1], {"from": rando})
+    with brownie.reverts():
+        plugin.setRewardStuff(minComp, minReward, {"from": rando})
+    with brownie.reverts():
+        plugin.setUniFees(compEthFee, ethWantFee, {"from": rando})
 
-    assert cloned_lender.harvestTrigger(1) == False
+    plugin.setKeep3r(accounts[1], {"from": strategist})
+    plugin.setRewardStuff(minComp, minReward, {"from": strategist})
+    plugin.setUniFees(compEthFee, ethWantFee, {"from": strategist})
 
-    chain.sleep(10*3600*24+1) # we wait 10 days for the cooldown period 
-    chain.mine(1)
+    assert plugin.keep3r() == accounts[1]
+    assert plugin.minCompToSell() == minComp
+    assert plugin.minRewardToHarvest() == minReward
+    assert plugin.ethToWantFee() == ethWantFee
+    assert plugin.compToEthFee() == compEthFee
 
-    assert cloned_lender.harvestTrigger(1) == False # always unavailable
+    tx = plugin.cloneCompoundV3Lender(strategy, "Clone life gg", cUsdc, {"from": strategist})
+    clone = GenericCompoundV3.at(tx.return_value)
 
-    cloned_strategy.harvest({'from': strategist})
-    chain.sleep(6*3600)
-    chain.mine(1)
-    vault.withdraw({"from": strategist})
+    assert clone.keep3r() == "0x0000000000000000000000000000000000000000"
+    assert clone.minCompToSell() == .05 * (10**18)
+    assert clone.minRewardToHarvest() == 10 * (10 ** 18)
+    assert clone.ethToWantFee() == 0
+    assert clone.compToEthFee() == 0
+
+    with brownie.reverts():
+        clone.setKeep3r(accounts[1], {"from": rando})
+    with brownie.reverts():
+        clone.setRewardStuff(minComp, minReward, {"from": rando})
+    with brownie.reverts():
+        clone.setUniFees(compEthFee, ethWantFee, {"from": rando})
+
+    clone.setKeep3r(accounts[1], {"from": strategist})
+    clone.setRewardStuff(minComp, minReward, {"from": strategist})
+    clone.setUniFees(compEthFee, ethWantFee, {"from": strategist})
+
+    assert clone.keep3r() == accounts[1]
+    assert clone.minCompToSell() == minComp
+    assert clone.minRewardToHarvest() == minReward
+    assert clone.ethToWantFee() == ethWantFee
+    assert clone.compToEthFee() == compEthFee
