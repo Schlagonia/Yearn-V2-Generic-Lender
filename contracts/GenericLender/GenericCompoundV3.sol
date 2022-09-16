@@ -244,8 +244,8 @@ contract GenericCompoundV3 is GenericLenderBase {
     }
 
     function _disposeOfComp() internal {
-        //check for Trade Factory implementation
-        if(tradeFactory != address(0)) return;
+        //check for Trade Factory implementation or that Uni fees are not set
+        if(tradeFactory != address(0) || ethToWantFee == 0) return;
 
         uint256 _comp = IERC20(comp).balanceOf(address(this));
 

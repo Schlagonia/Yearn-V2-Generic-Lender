@@ -107,6 +107,10 @@ def strategist_ms(accounts):
         # like governance, but better
     yield accounts.at("0x16388463d60FFE0661Cf7F1f31a7D658aC790ff7", force=True)
 
+@pytest.fixture
+def trade_factory():
+    yield Contract("0xd6a8ae62f4d593DAf72E2D7c9f7bDB89AB069F06")
+
 # specific addresses
 @pytest.fixture
 def usdc(interface):
