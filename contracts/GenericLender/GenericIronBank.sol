@@ -11,14 +11,33 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "../Interfaces/Balancer/IBalancerVault.sol";
 import "../Interfaces/Ironbank/IStakingRewards.sol";
 import "../Interfaces/Ironbank/IStakingRewardsFactory.sol";
+import "../Interfaces/ySwaps/ITradeFactory.sol";
 import "./GenericLenderBase.sol";
 
 /********************
- *   A lender plugin for LenderYieldOptimiser for any erc20 asset on compound (not eth)
- *   Made by SamPriestley.com
- *   https://github.com/Grandthrax/yearnv2/blob/master/contracts/GenericDyDx/GenericCompound.sol
+ *   A lender plugin for LenderYieldOptimiser for any erc20 asset on IronBank (not eth)
+ *   Made by @Schlagonia
+ *   https://github.com/Schlagonia/Yearn-V2-Generic-Lender/blob/main/contracts/GenericLender/GenericIronBank.sol
  *
  ********************* */
+
+interface IVeledrome {
+    struct route {
+        address from;
+        address to;
+        bool stable;
+    }
+    
+    function swapExactTokensForTokens(
+        uint amountIn,
+        uint amountOutMin,
+        route[] calldata routes,
+        address to,
+        uint deadline
+    ) external returns (uint256[] memory amounts);
+
+    function getAmountsOut(uint amountIn, route[] memory routes) external view returns (uint256[] memory amounts);
+} 
 
 contract GenericIronBank is GenericLenderBase {
     using SafeERC20 for IERC20;
@@ -26,7 +45,8 @@ contract GenericIronBank is GenericLenderBase {
     using SafeMath for uint256;
 
     uint256 private constant blocksPerYear = 3154 * 10**4;
-    address public constant ib = address(0x00a35FD824c717879BF370E70AC6868b95870Dfb);
+    address public constant ib = 
+        0x00a35FD824c717879BF370E70AC6868b95870Dfb;
     
     IStakingRewards public stakingRewards;
     IStakingRewardsFactory public constant rewardsFactory =
@@ -39,7 +59,8 @@ contract GenericIronBank is GenericLenderBase {
     address public constant WNATIVE =
         0x4200000000000000000000000000000000000006;
     //USDC for the middle of swaps
-    address internal constant usdc = 0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
+    address internal constant usdc = 
+        0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
     //Asset to use for swap as the middle
     address public middleSwapToken;
     //stable bool should be true if we are using usdc as the middle token and want is a stable coin
@@ -47,17 +68,20 @@ contract GenericIronBank is GenericLenderBase {
     ///For Optimism we will only be using the Veledrome router \\\\
     IVeledrome public constant router =
         IVeledrome(0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9);
-
+    //Balancer Variables for swapping
     IBalancerVault public constant balancerVault =
         IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
+    bytes32 public constant ibEthPoolId = 
+        bytes32(0xefb0d9f51efd52d7589a9083a6d0ca4de416c24900020000000000000000002c);
+    bytes32 public ethWantPoolId;
 
+    address public keep3r;
     address public tradeFactory;
-  
-    uint256 public dustThreshold;
-
     bool public ignorePrinting;
 
-    uint256 public minIbToSell = 0 ether;
+    uint256 public dustThreshold;
+    uint256 public minIbToSell;
+    uint256 public minRewardToHarvest;
 
     CErc20I public cToken;
 
@@ -65,30 +89,39 @@ contract GenericIronBank is GenericLenderBase {
         address _strategy,
         string memory name
     ) public GenericLenderBase(_strategy, name) {
-        _initialize(_cToken);
+        _initialize();
     }
 
-    function initialize(address _cToken) external {
-        _initialize(_cToken);
+    function initialize() external {
+        _initialize();
     }
 
-    function _initialize(address _cToken) internal {
+    function _initialize() internal {
         require(address(cToken) == address(0), "GenericIB already initialized");
         cToken = CErc20I(rewardsFactory.getStakingToken(address(want)));
-        stakingRewards = IStakingRewards(rewardsFactory.getStakingRewards(address(cToken)));
         require(cToken.underlying() == address(want), "WRONG CTOKEN");
-        want.safeApprove(_cToken, type(uint256).max);
+
+        address _stakingRewards = rewardsFactory.getStakingRewards(address(cToken));
+        if(_stakingRewards != address(0)) {
+            cToken.approve(_stakingRewards, type(uint256).max);
+        }
+        stakingRewards = IStakingRewards(_stakingRewards);
+        want.safeApprove(address(cToken), type(uint256).max);
         IERC20(ib).safeApprove(address(router), type(uint256).max);
+
+        //default to usdc
+        middleSwapToken = usdc;
+        //default to ignore printing due to lack of IB liquidity
+        ignorePrinting = true;
         dustThreshold = 1_000; //depends on want
     }
 
     function cloneCompoundLender(
         address _strategy,
-        string memory _name,
-        address _cToken
+        string memory _name
     ) external returns (address newLender) {
         newLender = _clone(_strategy, _name);
-        GenericIronBank(newLender).initialize(_cToken);
+        GenericIronBank(newLender).initialize();
     }
 
     function nav() external view override returns (uint256) {
@@ -102,10 +135,16 @@ contract GenericIronBank is GenericLenderBase {
 
     //Can update the staking rewards contract, May start as 0 if not rewarded then changes later
     function setStakingRewards() external management {
-        stakingRewards = IStakingRewards(rewardsFactory.getStakingRewards(address(cToken)));
+        address _stakingRewards = rewardsFactory.getStakingRewards(address(cToken));
+        if(_stakingRewards != address(0) && _stakingRewards != address(stakingRewards)){
+            cToken.approve(address(stakingRewards), 0);
+            cToken.approve(_stakingRewards, type(uint256).max);
+        }
+        stakingRewards = IStakingRewards(_stakingRewards);
     }
 
-    function setRewardStuff(uint256 _minIbToSell, uint256 _minRewardToHavest) external management {
+    function setRewardStuff(bytes32 _ethWantPoolId, uint256 _minIbToSell, uint256 _minRewardToHavest) external management {
+        ethWantPoolId = _ethWantPoolId;
         minIbToSell = _minIbToSell;
         minRewardToHarvest = _minRewardToHavest;
     }
@@ -113,6 +152,10 @@ contract GenericIronBank is GenericLenderBase {
     //adjust dust threshol
     function setIgnorePrinting(bool _ignorePrinting) external management {
         ignorePrinting = _ignorePrinting;
+    }
+
+    function setKeep3r(address _keep3r) external management {
+        keep3r = _keep3r;
     }
 
     function _nav() internal view returns (uint256) {
@@ -136,7 +179,7 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function stakedBalance() public view returns(uint256) {
-        if(address(stakingRewards) == address(0)) return 0;
+        if(address(stakingRewards) == address(0) || ignorePrinting) return 0;
 
         return stakingRewards.balanceOf(address(this));
     }
@@ -156,21 +199,21 @@ contract GenericIronBank is GenericLenderBase {
         }
         //comp speed is amount to borrow or deposit (so half the total distribution for want)
         //uint256 distributionPerBlock = ComptrollerI(unitroller).compSpeeds(address(cToken));
-        (uint distributionPerBlock, , uint supplyEnd) = liquidityMining.rewardSupplySpeeds(ib, address(cToken));
-        if(supplyEnd < block.timestamp){
+        if(stakingRewards.periodFinish() < block.timestamp){
             return 0;
         }
+        uint256 distributionPerSec = stakingRewards.getRewardRate(ib);
         //convert to per dolla
-        uint256 totalSupply = cToken.totalSupply().mul(cToken.exchangeRateStored()).div(1e18);
+        uint256 totalStaked = stakingRewards.totalSupply().mul(cToken.exchangeRateStored()).div(1e18);
         if(add){
-            totalSupply = totalSupply.add(change);
+            totalStaked = totalStaked.add(change);
         }else{
-            totalSupply = totalSupply.sub(change);
+            totalStaked = totalStaked.sub(change);
         }
 
         uint256 blockShareSupply = 0;
-        if(totalSupply > 0){
-            blockShareSupply = distributionPerBlock.mul(1e18).div(totalSupply);
+        if(totalStaked > 0){
+            blockShareSupply = distributionPerSec.mul(1e18).div(totalStaked);
         }
 
         uint256 estimatedWant =  priceCheck(ib, address(want),blockShareSupply);
@@ -205,6 +248,7 @@ contract GenericIronBank is GenericLenderBase {
     //emergency withdraw. sends balance plus amount to governance
     function emergencyWithdraw(uint256 amount) external override management {
         //dont care about errors here. we want to exit what we can
+        unStake(stakedBalance());
         cToken.redeem(amount);
 
         want.safeTransfer(vault.governance(), want.balanceOf(address(this)));
@@ -212,13 +256,17 @@ contract GenericIronBank is GenericLenderBase {
 
     //withdraw an amount including any want balance
     function _withdraw(uint256 amount) internal returns (uint256) {
-        uint256 balanceUnderlying = cToken.balanceOfUnderlying(address(this));
+        //Call to update exchange rate first
+        cToken.balanceOfUnderlying(address(this));
+        //This should be accurate due to previous call
+        uint256 balanceUnderlying = underlyingBalanceStored();
         uint256 looseBalance = want.balanceOf(address(this));
         uint256 total = balanceUnderlying.add(looseBalance);
 
         if (amount.add(dustThreshold) >= total) {
             //cant withdraw more than we own. so withdraw all we can
             if(balanceUnderlying > dustThreshold){
+                unStake(stakedBalance());
                 require(cToken.redeem(cToken.balanceOf(address(this))) == 0, "ctoken: redeemAll fail");
             }
             looseBalance = want.balanceOf(address(this));
@@ -246,12 +294,10 @@ contract GenericIronBank is GenericLenderBase {
                 toWithdraw = liquidity;
             }
             if(toWithdraw > dustThreshold){
+                unStake(convertFromUnderlying(toWithdraw));
                 require(cToken.redeemUnderlying(toWithdraw) == 0, "ctoken: redeemUnderlying fail");
             }
 
-        }
-        if(!ignorePrinting){
-            _disposeOfComp();
         }
 
         looseBalance = want.balanceOf(address(this));
@@ -274,7 +320,7 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function harvestTrigger(uint256 /*callCost*/) external view returns(bool) {
-        if(address(stakingRewards) == address(0)) return false;
+        if(address(stakingRewards) == address(0) || ignorePrinting) return false;
 
         if(getRewardsOwed().add(IERC20(ib).balanceOf(address(this))) >= minRewardToHarvest) return true;
     }
@@ -296,15 +342,65 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function _swapFrom(address _from, address _to, uint256 _amountIn) internal{
-    
+        IBalancerVault.BatchSwapStep[] memory swaps;
+        IAsset[] memory assets;
+        int[] memory limits;
+        if(address(want) == WNATIVE) {
+            swaps = new IBalancerVault.BatchSwapStep[](1);
+            assets = new IAsset[](2);
+            limits = new int[](2);
+        } else{
+            swaps = new IBalancerVault.BatchSwapStep[](2);
+            assets = new IAsset[](3);
+            limits = new int[](3);
+            //Sell WETH -> want
+            swaps[1] = IBalancerVault.BatchSwapStep(
+                ethWantPoolId,
+                2,
+                3,
+                0,
+                abi.encode(0)
+            );
+            assets[2] = IAsset(address(want));
+        }
+        
+        //Sell ib -> weth
+        swaps[0] = IBalancerVault.BatchSwapStep(
+            ibEthPoolId,
+            0,
+            2,
+            _amountIn,
+            abi.encode(0)
+        );
 
-        router.swapExactTokensForTokens(
-            _amountIn, 
-            0, 
-            getTokenOutPath(_from, _to), 
-            address(this), 
+        //Match the token address with the desired index for this trade
+        assets[0] = IAsset(ib);
+        assets[1] = IAsset(WNATIVE);
+        
+        //Only min we need to set is for the balance going in
+        limits[0] = int(_amountIn);
+
+        balancerVault.batchSwap(
+            IBalancerVault.SwapKind.GIVEN_IN, 
+            swaps, 
+            assets, 
+            getFundManagement(), 
+            limits, 
             block.timestamp
         );
+    }
+
+    function getFundManagement() 
+        internal 
+        view 
+        returns (IBalancerVault.FundManagement memory fundManagement) 
+    {
+        fundManagement = IBalancerVault.FundManagement(
+                address(this),
+                false,
+                payable(address(this)),
+                false
+            );
     }
 
     function getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (IVeledrome.route[] memory _path) {
@@ -347,15 +443,22 @@ contract GenericIronBank is GenericLenderBase {
 
     function stake() internal {
         uint256 balance = cToken.balanceOf(address(this));
-        if(stakingRewards == address(0) || balance == 0) return;
+        if(address(stakingRewards) == address(0) || ignorePrinting || balance == 0) return;
 
         stakingRewards.stake(balance);
+    }
+
+    function unStake(uint256 amount) internal {
+        if(address(stakingRewards) == address(0) || ignorePrinting || amount == 0) return;
+
+        stakingRewards.withdraw(amount);
     }
 
     function withdrawAll() external override management returns (bool) {
         uint256 liquidity = want.balanceOf(address(cToken));
         uint256 liquidityInCTokens = convertFromUnderlying(liquidity);
-        uint256 amountInCtokens = cToken.balanceOf(address(this));  /// NNEEE TP UNSTAKE GERE 
+        unStake(stakedBalance());
+        uint256 amountInCtokens = cToken.balanceOf(address(this));
 
         bool all;
 
@@ -425,7 +528,7 @@ contract GenericIronBank is GenericLenderBase {
         ITradeFactory tf = ITradeFactory(_tradeFactory);
 
         IERC20(ib).safeApprove(_tradeFactory, type(uint256).max);
-        tf.enable(comp, address(want));
+        tf.enable(ib, address(want));
         
         tradeFactory = _tradeFactory;
     }
@@ -438,5 +541,13 @@ contract GenericIronBank is GenericLenderBase {
         IERC20(ib).safeApprove(tradeFactory, 0);
         
         tradeFactory = address(0);
+    }
+
+    modifier keepers() {
+        require(
+            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
+            "!keepers"
+        );
+        _;
     }
 }

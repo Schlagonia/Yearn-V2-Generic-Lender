@@ -51,4 +51,6 @@ interface IStakingRewards {
     function getRewardFor(address account) external;
 
     function exit() external;
+
+    function periodFinish() external view returns(uint256);
 }
