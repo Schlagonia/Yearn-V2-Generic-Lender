@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/math/Math.sol";
 import "../Interfaces/Balancer/IBalancerVault.sol";
 import "../Interfaces/Ironbank/IStakingRewards.sol";
 import "../Interfaces/Ironbank/IStakingRewardsFactory.sol";
@@ -107,7 +108,6 @@ contract GenericIronBank is GenericLenderBase {
         }
         stakingRewards = IStakingRewards(_stakingRewards);
         want.safeApprove(address(cToken), type(uint256).max);
-        IERC20(ib).safeApprove(address(router), type(uint256).max);
 
         //default to usdc
         middleSwapToken = usdc;
@@ -116,7 +116,7 @@ contract GenericIronBank is GenericLenderBase {
         dustThreshold = 1_000; //depends on want
     }
 
-    function cloneCompoundLender(
+    function cloneIronBankLender(
         address _strategy,
         string memory _name
     ) external returns (address newLender) {
@@ -179,7 +179,7 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function stakedBalance() public view returns(uint256) {
-        if(address(stakingRewards) == address(0) || ignorePrinting) return 0;
+        if(address(stakingRewards) == address(0)) return 0;
 
         return stakingRewards.balanceOf(address(this));
     }
@@ -248,8 +248,8 @@ contract GenericIronBank is GenericLenderBase {
     //emergency withdraw. sends balance plus amount to governance
     function emergencyWithdraw(uint256 amount) external override management {
         //dont care about errors here. we want to exit what we can
-        unStake(stakedBalance());
-        cToken.redeem(amount);
+        unStake(convertFromUnderlying(amount));
+        cToken.redeemUnderlying(amount);
 
         want.safeTransfer(vault.governance(), want.balanceOf(address(this)));
     }
@@ -320,9 +320,9 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function harvestTrigger(uint256 /*callCost*/) external view returns(bool) {
-        if(address(stakingRewards) == address(0) || ignorePrinting) return false;
+        if(address(stakingRewards) == address(0)) return false;
 
-        if(getRewardsOwed().add(IERC20(ib).balanceOf(address(this))) >= minRewardToHarvest) return true;
+        if(getRewardsOwed().add(IERC20(ib).balanceOf(address(this))) > minRewardToHarvest) return true;
     }
 
     function getRewardsOwed() public view returns(uint256) {
@@ -330,7 +330,7 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function _disposeOfComp() internal {
-        if(address(stakingRewards) != address(0)){
+        if(address(stakingRewards) != address(0) && stakedBalance() > 0){
             stakingRewards.getReward();
         }
 
@@ -356,8 +356,8 @@ contract GenericIronBank is GenericLenderBase {
             //Sell WETH -> want
             swaps[1] = IBalancerVault.BatchSwapStep(
                 ethWantPoolId,
+                1,
                 2,
-                3,
                 0,
                 abi.encode(0)
             );
@@ -368,7 +368,7 @@ contract GenericIronBank is GenericLenderBase {
         swaps[0] = IBalancerVault.BatchSwapStep(
             ibEthPoolId,
             0,
-            2,
+            1,
             _amountIn,
             abi.encode(0)
         );
@@ -379,6 +379,8 @@ contract GenericIronBank is GenericLenderBase {
         
         //Only min we need to set is for the balance going in
         limits[0] = int(_amountIn);
+
+        IERC20(ib).safeApprove(address(balancerVault), _amountIn);
 
         balancerVault.batchSwap(
             IBalancerVault.SwapKind.GIVEN_IN, 
@@ -443,15 +445,15 @@ contract GenericIronBank is GenericLenderBase {
 
     function stake() internal {
         uint256 balance = cToken.balanceOf(address(this));
-        if(address(stakingRewards) == address(0) || ignorePrinting || balance == 0) return;
+        if(address(stakingRewards) == address(0) || balance == 0) return;
 
         stakingRewards.stake(balance);
     }
 
     function unStake(uint256 amount) internal {
-        if(address(stakingRewards) == address(0) || ignorePrinting || amount == 0) return;
+        if(address(stakingRewards) == address(0) || amount == 0) return;
 
-        stakingRewards.withdraw(amount);
+        stakingRewards.withdraw(Math.min(amount, stakedBalance()));
     }
 
     function withdrawAll() external override management returns (bool) {
