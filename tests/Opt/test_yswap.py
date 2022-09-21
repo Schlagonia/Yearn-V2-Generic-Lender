@@ -3,12 +3,13 @@ import brownie
 import pytest
 import eth_utils
 from Opt.useful_methods import deposit, sleep, close
+
 from weiroll import WeirollPlanner, WeirollContract
 
 
 def test_yswap(
     chain, pluggedVaultUsdc, pluggedStrategyUsdc, pluginUsdc, strategist,
-    usdc, whaleUsdc, trade_factory, router, gov, ib, rando, whaleIb
+    usdc, whaleUsdc, trade_factory, router, gov, ib, rando, whaleIb, cUsdc
 ):
     # Deposit to the vault
     plugin = pluginUsdc
@@ -25,7 +26,6 @@ def test_yswap(
     chain.mine(1)
     strategy.harvest({"from": strategist})
     assert close(plugin.nav(), amount)
-    ib.transfer(plugin.address, 100e18, {"from": whaleIb})
 
     #sleep(chain, 3600)
     chain.sleep(3600)
@@ -38,10 +38,19 @@ def test_yswap(
     plugin.setTradeFactory(trade_factory, {"from": gov})
     assert plugin.tradeFactory() == trade_factory
 
+    with reverts():
+        plugin.manualClaimAndDontSell({"from": rando})
+
     assert plugin.harvestTrigger("1") == True
 
+    assert ib.balanceOf(plugin.address) == 0
+    plugin.manualClaimAndDontSell({"from": strategist})
+    assert ib.balanceOf(plugin.address) > 0
+    chain.mine(1)
+    #should not sell rewards
     plugin.harvest({"from": gov})
 
+    assert ib.balanceOf(plugin.address) > 0
     token_in = ib
     token_out = token
 
@@ -49,10 +58,13 @@ def test_yswap(
     receiver = plugin.address
     amount_in = token_in.balanceOf(plugin.address)
     assert amount_in > 0
+    amount_out = 10e6
+    usdc.transfer(trade_factory.address, amount_out, {"from": whaleUsdc})
+    to_send = token_out.balanceOf(trade_factory.address)
 
     router = WeirollContract.createContract(Contract(plugin.router()))
     receiver = plugin
-    token_out = token
+    token_out = WeirollContract.createContract(token)
 
     planner = WeirollPlanner(trade_factory)
     token_in = WeirollContract.createContract(token_in)
@@ -85,6 +97,7 @@ def test_yswap(
         )
     )
 
+    """
     planner.add(
         router.swapExactTokensForTokens(
             amount_in,
@@ -94,17 +107,25 @@ def test_yswap(
             2**256 - 1
         )
     )
+    """
+    #simulate a swap since there is currenty no liquidity for IB
+    planner.add(
+        token_out.transfer(
+            plugin.address,
+            to_send
+        )
+    )
 
     cmds, state = planner.plan()
-    trade_factory.execute(cmds, state, {"from": trade_factory.governance()})
-    afterBal = token_out.balanceOf(plugin)
-    print(token_out.balanceOf(plugin))
+    trade_factory.execute(cmds, state, {"from": "0x7Cd0A1A67B6aC5fC053d9b60C1E84592F248155b"})
+    afterBal = usdc.balanceOf(plugin)
+    print(usdc.balanceOf(plugin))
 
     assert afterBal > 0
     assert ib.balanceOf(plugin.address) == 0
 
     strategy.setWithdrawalThreshold(0, {"from":strategist})
-
+    cUsdc.accrueInterest({"from": rando})
     tx = strategy.harvest({"from": strategist})
     print(tx.events)
     assert tx.events["Harvested"]["profit"] >= afterBal

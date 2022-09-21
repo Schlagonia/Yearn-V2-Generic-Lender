@@ -16,11 +16,11 @@ def test_set_ignorePrinting(
     #Can assume if it doesnt return the original it returned the correct since its a boolean
     assert plugin.ignorePrinting() == opposite
 
-    plugin.setIsIncentivised(currentState, {"from": gov})
+    plugin.setIgnorePrinting(currentState, {"from": gov})
     assert plugin.ignorePrinting() == currentState
 
     with brownie.reverts():
-        plugin.setIsIncentivised(opposite, {"from": rando})
+        plugin.setIgnorePrinting(opposite, {"from": rando})
 
 
 #set keeper
@@ -68,23 +68,24 @@ def test_change_middle_token(
 
 
 def test_manual_override(
-    strategy, chain, vault, currency, interface, whale, strategist, gov, rando
+    pluggedStrategy, chain, vault, weth, interface, whale, strategist, gov, rando
 ):
-
+    strategy = pluggedStrategy
+    currency = weth
     decimals = currency.decimals()
 
     deposit_limit = 100_000_000 * (10 ** decimals)
     vault.addStrategy(strategy, 9800, 0, 2 ** 256 - 1, 500, {"from": gov})
 
-    amount1 = 50 * (10 ** decimals)
+    amount1 = 5 * (10 ** decimals)
     currency.approve(vault, 2 ** 256 - 1, {"from": whale})
     currency.approve(vault, 2 ** 256 - 1, {"from": strategist})
 
     vault.setDepositLimit(deposit_limit, {"from": gov})
     assert vault.depositLimit() > 0
 
-    amount2 = 50_000 * (10 ** decimals)
-
+    amount2 = 20 * (10 ** decimals)
+    currency.transfer(strategist, amount1, {"from": whale})
     vault.deposit(amount1, {"from": strategist})
     vault.deposit(amount2, {"from": whale})
 
@@ -95,7 +96,7 @@ def test_manual_override(
     for j in status:
         plugin = interface.IGeneric(j[3])
 
-        with brownie.reverts("!gov"):
+        with brownie.reverts("!management"):
             plugin.emergencyWithdraw(1, {"from": rando})
         with brownie.reverts("!management"):
             plugin.withdrawAll({"from": rando})

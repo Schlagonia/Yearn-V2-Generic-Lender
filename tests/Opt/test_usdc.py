@@ -1,4 +1,5 @@
 from itertools import count
+from multiprocessing import current_process
 from brownie import Wei, reverts
 from useful_methods import genericStateOfVault, genericStateOfStrat
 import random
@@ -6,12 +7,12 @@ import brownie
 
 
 def test_good_migration(
-    usdc, OptStrategy, chain, whaleUsdc, gov, strategist, rando, vaultUsdc, strategyUsdc, fn_isolation
+    usdc, OptStrategy, chain, whaleUsdc, gov, strategist, rando, vaultUsdc, pluggedStrategyUsdc, fn_isolation
 ):
     currency = usdc
     whale = whaleUsdc
     vault = vaultUsdc
-    strategy = strategyUsdc
+    strategy = pluggedStrategyUsdc
 
     usdc.approve(vault, 2 ** 256 - 1, {"from": whale})
     usdc.approve(vault, 2 ** 256 - 1, {"from": strategist})
@@ -67,16 +68,17 @@ def test_normal_activity(
     strategist,
     rando,
     vaultUsdc,
-    strategyUsdc,
+    pluggedStrategyUsdc,
     fn_isolation,
-    aUsdc,
+    pluginUsdc
 ):
     starting_balance = usdc.balanceOf(strategist)
     currency = usdc
     decimals = currency.decimals()
     whale = whaleUsdc
     vault = vaultUsdc
-    strategy = strategyUsdc
+    plugin = pluginUsdc
+    strategy = pluggedStrategyUsdc
 
     usdc.approve(vault, 2 ** 256 - 1, {"from": whale})
     usdc.approve(vault, 2 ** 256 - 1, {"from": strategist})
@@ -113,7 +115,7 @@ def test_normal_activity(
 
     for i in range(15):
         waitBlock = random.randint(10, 50)
-        cUsdc.accrueAccount(strategy.lenders(0), {"from": strategy.lenders(0)})
+        cUsdc.accrueInterest({"from": plugin.address})
         chain.sleep(15 * 30)
         chain.mine(waitBlock)
 
@@ -177,11 +179,11 @@ def test_normal_activity(
 
 
 def test_debt_increase(
-    usdc, OptStrategy, chain, whale, gov, strategist, rando, vaultUsdc, strategyUsdc, fn_isolation, whaleUsdc
+    usdc, OptStrategy, chain, whale, gov, strategist, rando, vaultUsdc, pluggedStrategyUsdc, fn_isolation, whaleUsdc
 ):
     whale = whaleUsdc
     vault = vaultUsdc
-    strategy = strategyUsdc
+    strategy = pluggedStrategyUsdc
     currency = usdc
     usdc.approve(vault, 2 ** 256 - 1, {"from": whale})
 
@@ -231,22 +233,24 @@ def test_debt_increase(
 
 
 def test_vault_shares(
-    strategyUsdc,
+    pluggedStrategyUsdc,
     chain,
     vaultUsdc,
     cUsdc,
-    crUsdc,
     rewards,
-    currency,
     gov,
+    usdc,
     interface,
     whaleUsdc,
     strategist,
     fn_isolation,
+    pluginUsdc
 ):
     whale = whaleUsdc
     vault = vaultUsdc
-    strategy = strategyUsdc
+    strategy = pluggedStrategyUsdc
+    plugin = pluginUsdc
+    currency = usdc
     deposit_limit = 100_000_000 * 1e6
     debt_ratio = 10_000
     vault.addStrategy(strategy, debt_ratio, 0, 2 ** 256 - 1, 500, {"from": gov})
@@ -310,7 +314,7 @@ def test_vault_shares(
         / (10 ** decimals)
         < amount1 * 2 * 1.001
     )
-    cUsdc.accrueAccount(strategy.lenders(0), {"from": strategy.lenders(0)})
+    cUsdc.accrueInterest({"from": plugin.address})
     strategy.harvest({"from": strategist})
 
     chain.sleep(6 * 3600 + 1)  # pass protection period
@@ -345,7 +349,7 @@ def test_vault_shares(
 
 
 def test_apr(
-    strategyUsdc,
+    pluggedStrategyUsdc,
     chain,
     vaultUsdc,
     cUsdc,
@@ -356,11 +360,13 @@ def test_apr(
     whaleUsdc,
     strategist,
     fn_isolation,
+    pluginUsdc
 ):
     whale = whaleUsdc
     vault = vaultUsdc
-    strategy = strategyUsdc
+    strategy = pluggedStrategyUsdc
     currency = usdc
+    plugin = pluginUsdc
     decimals = currency.decimals()
     deposit_limit = 100_000_000 * 1e6
     debt_ratio = 10_000
@@ -382,11 +388,11 @@ def test_apr(
     startingBalance = vault.totalAssets()
 
     for i in range(10):
-        cUsdc.accrueAccount(strategy.lenders(0), {"from": strategy.lenders(0)})
         waitBlock = 25
         # print(f'\n----wait {waitBlock} blocks----')
         chain.mine(waitBlock)
         chain.sleep(25 * 13)
+        cUsdc.accrueInterest({"from": plugin.address})
         # print(f'\n----harvest----')
         strategy.harvest({"from": strategist})
 

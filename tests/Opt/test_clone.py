@@ -3,7 +3,6 @@ import pytest
 import brownie
 import random
 from brownie import Wei
-
 from Opt.useful_methods import deposit, sleep, close
 
 def test_v3_clone(
@@ -15,7 +14,6 @@ def test_v3_clone(
     router2,
     op
 ):
-    
     tx = plugin.cloneIronBankLender(strategy, plugin.lenderName())
     new_plugin = GenericIronBank.at(tx.return_value)
 
@@ -43,7 +41,6 @@ def test_clone_trigger(
     
     tx = plugin.cloneIronBankLender(strategy, plugin.lenderName())
     new_plugin = GenericIronBank.at(tx.return_value)
-
  
     assert plugin.want() == new_plugin.want()
     assert plugin.lenderName() == new_plugin.lenderName()
@@ -114,11 +111,11 @@ def test_clone_harvest(
 
     vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from":gov})
     strategy.addLender(new_plugin, {"from": gov})
-    deposit(10e6, whale, weth, vault)
+    deposit(10e18, whale, weth, vault)
     strategy.harvest({"from": gov})
     assert new_plugin.harvestTrigger("100000000") == False
-    sleep(chain, 1)
-    ib.transfer(new_plugin.address, 100e18, {"from": whaleIb})
+    sleep(chain, 20)
+    #ib.transfer(new_plugin.address, 100e18, {"from": whaleIb})
     assert new_plugin.harvestTrigger("100000000") == True 
     before_bal = new_plugin.underlyingBalanceStored()
     before_stake = new_plugin.stakedBalance()
@@ -164,7 +161,7 @@ def test_clone(
     tx = strategy.clone(vault)
     cloned_strategy = OptStrategy.at(tx.return_value)
     cloned_strategy.setWithdrawalThreshold(
-        strategy.withdrawalThreshold(), {"from": gov}
+        100, {"from": gov}
     )
     cloned_strategy.setDebtThreshold(strategy.debtThreshold(), {"from": gov})
     cloned_strategy.setProfitFactor(strategy.profitFactor(), {"from": gov})
@@ -185,7 +182,6 @@ def test_clone(
     with brownie.reverts():
         cloned_lender.initialize( {'from': gov})
 
-    starting_balance = usdc.balanceOf(strategist)
     currency = usdc
     decimals = currency.decimals()
 
@@ -201,6 +197,7 @@ def test_clone(
     # our humble strategist deposits some test funds
     depositAmount = 501 * (10 ** (decimals))
     usdc.transfer(strategist, depositAmount, {"from": whale})
+    starting_balance = usdc.balanceOf(strategist)
     vault.deposit(depositAmount, {"from": strategist})
 
     assert cloned_strategy.estimatedTotalAssets() == 0
@@ -243,10 +240,11 @@ def test_clone(
             expectedout = sharesout * (shareprice / 1e18) * (10 ** (decimals * 2))
 
             balanceBefore = currency.balanceOf(whale)
-            vault.withdraw(sharesout, {"from": whale})
+            tx = vault.withdraw(sharesout, {"from": whale})
             chain.mine(waitBlock)
             balanceAfter = currency.balanceOf(whale)
-
+            print(f"Tried to withdraw {expectedout} with {sharesout} shares")
+            print(f"withdrew {tx.return_value} from vault")
             withdrawn = balanceAfter - balanceBefore
             assert withdrawn > expectedout * 0.99 and withdrawn < expectedout * 1.01
 

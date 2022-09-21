@@ -32,8 +32,8 @@ def test_harvest(
     assert plugin.nav() == plugin.underlyingBalanceStored()
 
     assert plugin.harvestTrigger("100000000") == False
-    sleep(chain, 1)
-    ib.transfer(plugin.address, 100e18, {"from": whaleIb})
+    sleep(chain, 20)
+    #ib.transfer(plugin.address, 100e18, {"from": whaleIb})
     assert plugin.harvestTrigger("100000000") == True 
     
 

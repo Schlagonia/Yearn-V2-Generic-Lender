@@ -45,10 +45,13 @@ contract GenericIronBank is GenericLenderBase {
     using Address for address;
     using SafeMath for uint256;
 
+    //Seconds per year for calculations
     uint256 private constant blocksPerYear = 3154 * 10**4;
+    //Reward token
     address public constant ib = 
         0x00a35FD824c717879BF370E70AC6868b95870Dfb;
     
+    //Contracts for staking i tokens
     IStakingRewards public stakingRewards;
     IStakingRewardsFactory public constant rewardsFactory =
         IStakingRewardsFactory(0x35F70CE60f049A8c21721C53a1dFCcB5bF4a1Ea8);
@@ -74,6 +77,7 @@ contract GenericIronBank is GenericLenderBase {
         IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
     bytes32 public constant ibEthPoolId = 
         bytes32(0xefb0d9f51efd52d7589a9083a6d0ca4de416c24900020000000000000000002c);
+    //Can be set for a weth - want lp balncer pool to make harvests work
     bytes32 public ethWantPoolId;
 
     address public keep3r;
@@ -136,7 +140,7 @@ contract GenericIronBank is GenericLenderBase {
     //Can update the staking rewards contract, May start as 0 if not rewarded then changes later
     function setStakingRewards() external management {
         address _stakingRewards = rewardsFactory.getStakingRewards(address(cToken));
-        if(_stakingRewards != address(0) && _stakingRewards != address(stakingRewards)){
+        if(_stakingRewards != address(0)){
             cToken.approve(address(stakingRewards), 0);
             cToken.approve(_stakingRewards, type(uint256).max);
         }
@@ -197,8 +201,7 @@ contract GenericIronBank is GenericLenderBase {
         if(ignorePrinting){
             return 0;
         }
-        //comp speed is amount to borrow or deposit (so half the total distribution for want)
-        //uint256 distributionPerBlock = ComptrollerI(unitroller).compSpeeds(address(cToken));
+
         if(stakingRewards.periodFinish() < block.timestamp){
             return 0;
         }
@@ -256,8 +259,8 @@ contract GenericIronBank is GenericLenderBase {
 
     //withdraw an amount including any want balance
     function _withdraw(uint256 amount) internal returns (uint256) {
-        //Call to update exchange rate first
-        cToken.balanceOfUnderlying(address(this));
+        //Call to accrue rewards and update exchange rate first
+        cToken.accrueInterest();
         //This should be accurate due to previous call
         uint256 balanceUnderlying = underlyingBalanceStored();
         uint256 looseBalance = want.balanceOf(address(this));
@@ -456,7 +459,13 @@ contract GenericIronBank is GenericLenderBase {
         stakingRewards.withdraw(Math.min(amount, stakedBalance()));
     }
 
+    function manualUnstake(uint256 amount) external management {
+        stakingRewards.withdraw(Math.min(amount, stakedBalance()));
+    }
+
     function withdrawAll() external override management returns (bool) {
+        //Call to accrue rewards and update exchange rate first
+        cToken.accrueInterest();
         uint256 liquidity = want.balanceOf(address(cToken));
         uint256 liquidityInCTokens = convertFromUnderlying(liquidity);
         unStake(stakedBalance());

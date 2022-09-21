@@ -119,6 +119,7 @@ def strategyUsdc(
 ):
     strategyUsdc = strategist.deploy(OptStrategy, vaultUsdc)
     strategyUsdc.setKeeper(keeper)
+    strategyUsdc.setWithdrawalThreshold(100, {"from": gov})
 
     assert strategyUsdc.numLenders() == 0
     yield strategyUsdc

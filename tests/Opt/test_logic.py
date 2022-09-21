@@ -1,7 +1,7 @@
 import pytest
 import brownie
 from Opt.useful_methods import deposit, sleep, close
-from brownie import Wei, reverts
+from brownie import Wei, reverts, Contract
 
 #Strategy and Vault are imported after plugin has been plugged in
 def test_logic(
@@ -18,7 +18,7 @@ def test_logic(
 
     strategy = pluggedStrategy
     vault = pluggedVault
-
+    cToken = Contract(plugin.cToken())
     assert plugin.hasAssets() == False
     assert plugin.nav() == 0
     #Deposit
@@ -29,7 +29,7 @@ def test_logic(
     assert plugin.hasAssets() == True
     assert plugin.nav() >= amount * .999
     assert plugin.nav() == plugin.underlyingBalanceStored()
-
+    sleep(chain, 2)
     deposit(amount, whale, weth, vault)
     apr = plugin.apr()
     aprAfter = plugin.aprAfterDeposit(amount)
@@ -41,7 +41,7 @@ def test_logic(
 
     nav = plugin.nav()
     sleep(chain, 10)
-    cUsdc.balanceOfUnderlying(plugin.address, {"from": gov})
+    cToken.accrueInterest({"from": gov})
     newNav = plugin.nav()
     assert newNav > nav
 
@@ -63,8 +63,6 @@ def test_logic(
     wethAfterBal = weth.balanceOf(whale.address)
 
     assert wethBal + amount <= wethAfterBal
-   
-
 
 def test_emergency_withdraw(
     pluggedVault,
