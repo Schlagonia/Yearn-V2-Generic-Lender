@@ -318,10 +318,8 @@ contract GenericCompoundV3 is GenericLenderBase {
     }
 
     function protectedTokens() internal view override returns (address[] memory) {
-        address[] memory protected = new address[](3);
+        address[] memory protected = new address[](1);
         protected[0] = address(want);
-        protected[1] = address(comet);
-        protected[2] = comp;
         return protected;
     }
 

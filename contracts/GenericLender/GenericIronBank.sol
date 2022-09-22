@@ -528,7 +528,11 @@ contract GenericIronBank is GenericLenderBase {
         return supplyRate.mul(blocksPerYear);
     }
 
-    function protectedTokens() internal view override returns (address[] memory) {}
+    function protectedTokens() internal view override returns (address[] memory) {
+        address[] memory protected = new address[](1);
+        protected[0] = address(want);
+        return protected;
+    }
 
     // ---------------------- YSWAPS FUNCTIONS ----------------------
     function setTradeFactory(address _tradeFactory) external onlyGovernance {
