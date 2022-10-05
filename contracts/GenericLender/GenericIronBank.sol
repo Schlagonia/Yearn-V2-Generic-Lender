@@ -60,7 +60,7 @@ contract GenericIronBank is GenericLenderBase {
         Rewards token stuff
     ***/
     //Wrapped native token for chain i.e. WETH
-    address public constant WNATIVE =
+    address internal constant WNATIVE =
         0x4200000000000000000000000000000000000006;
     //USDC for the middle of swaps
     address internal constant usdc = 
@@ -109,8 +109,9 @@ contract GenericIronBank is GenericLenderBase {
         address _stakingRewards = rewardsFactory.getStakingRewards(address(cToken));
         if(_stakingRewards != address(0)) {
             cToken.approve(_stakingRewards, type(uint256).max);
+            stakingRewards = IStakingRewards(_stakingRewards);
         }
-        stakingRewards = IStakingRewards(_stakingRewards);
+
         want.safeApprove(address(cToken), type(uint256).max);
 
         //default to usdc
@@ -143,6 +144,8 @@ contract GenericIronBank is GenericLenderBase {
         if(_stakingRewards != address(0)){
             cToken.approve(address(stakingRewards), 0);
             cToken.approve(_stakingRewards, type(uint256).max);
+            //make sure ignorePrinting == true
+            ignorePrinting = true;
         }
         stakingRewards = IStakingRewards(_stakingRewards);
     }
@@ -224,7 +227,7 @@ contract GenericIronBank is GenericLenderBase {
             blockShareSupply = distributionPerSec.mul(1e18).div(totalStaked);
         }
 
-        uint256 estimatedWant = priceCheck(ib, address(want), blockShareSupply);
+        uint256 estimatedWant = _priceCheck(ib, address(want), blockShareSupply);
         uint256 compRate;
         if(estimatedWant != 0){
             compRate = estimatedWant.mul(9).div(10); //10% pessimist
@@ -234,11 +237,11 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     //WARNING. manipulatable and simple routing. Only use for safe functions
-    function priceCheck(address start, address end, uint256 _amount) public view returns (uint256) {
+    function _priceCheck(address start, address end, uint256 _amount) internal view returns (uint256) {
         if (_amount == 0) {
             return 0;
         }
-        uint256[] memory amounts = router.getAmountsOut(_amount, getTokenOutPath(start, end));
+        uint256[] memory amounts = router.getAmountsOut(_amount, _getTokenOutPath(start, end));
 
         return amounts[amounts.length - 1];
     }
@@ -255,7 +258,7 @@ contract GenericIronBank is GenericLenderBase {
     //emergency withdraw. sends balance plus amount to governance
     function emergencyWithdraw(uint256 amount) external override management {
         //dont care about errors here. we want to exit what we can
-        unStake(convertFromUnderlying(amount));
+        _unStake(_convertFromUnderlying(amount));
         cToken.redeemUnderlying(amount);
 
         want.safeTransfer(vault.governance(), balanceOfWant());
@@ -273,7 +276,7 @@ contract GenericIronBank is GenericLenderBase {
         if (amount >= total) {
             //cant withdraw more than we own. so withdraw all we can
             if(balanceUnderlying > dustThreshold){
-                unStake(stakedBalance());
+                _unStake(stakedBalance());
                 require(cToken.redeem(balanceOfCToken()) == 0, "ctoken: redeemAll fail");
             }
             looseBalance = balanceOfWant();
@@ -301,7 +304,7 @@ contract GenericIronBank is GenericLenderBase {
                 toWithdraw = liquidity;
             }
             if(toWithdraw > 0){
-                unStake(convertFromUnderlying(toWithdraw));
+                _unStake(_convertFromUnderlying(toWithdraw));
                 require(cToken.redeemUnderlying(toWithdraw) == 0, "ctoken: redeemUnderlying fail");
             }
         }
@@ -322,7 +325,7 @@ contract GenericIronBank is GenericLenderBase {
         if(wantBalance > 0) {
             cToken.mint(wantBalance);
         }
-        stake();
+        _stake();
     }
 
     function harvestTrigger(uint256 /*callCost*/) external view returns(bool) {
@@ -392,13 +395,13 @@ contract GenericIronBank is GenericLenderBase {
             IBalancerVault.SwapKind.GIVEN_IN, 
             swaps, 
             assets, 
-            getFundManagement(), 
+            _getFundManagement(), 
             limits, 
             block.timestamp
         );
     }
 
-    function getFundManagement() 
+    function _getFundManagement() 
         internal 
         view 
         returns (IBalancerVault.FundManagement memory fundManagement) 
@@ -411,7 +414,7 @@ contract GenericIronBank is GenericLenderBase {
             );
     }
 
-    function getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (IVeledrome.route[] memory _path) {
+    function _getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (IVeledrome.route[] memory _path) {
         bool isNative = _tokenIn == middleSwapToken || _tokenOut == middleSwapToken;
         _path = new IVeledrome.route[](isNative ? 1 : 2);
 
@@ -446,17 +449,17 @@ contract GenericIronBank is GenericLenderBase {
     function deposit() external override management {
         uint256 balance = balanceOfWant();
         require(cToken.mint(balance) == 0, "ctoken: mint fail");
-        stake();
+        _stake();
     }
 
-    function stake() internal {
+    function _stake() internal {
         uint256 balance = balanceOfCToken();
         if(address(stakingRewards) == address(0) || balance == 0) return;
 
         stakingRewards.stake(balance);
     }
 
-    function unStake(uint256 amount) internal {
+    function _unStake(uint256 amount) internal {
         if(address(stakingRewards) == address(0) || amount == 0) return;
 
         stakingRewards.withdraw(Math.min(amount, stakedBalance()));
@@ -470,8 +473,8 @@ contract GenericIronBank is GenericLenderBase {
         //Call to accrue rewards and update exchange rate first
         cToken.accrueInterest();
         uint256 liquidity = want.balanceOf(address(cToken));
-        uint256 liquidityInCTokens = convertFromUnderlying(liquidity);
-        unStake(stakedBalance());
+        uint256 liquidityInCTokens = _convertFromUnderlying(liquidity);
+        _unStake(stakedBalance());
         uint256 amountInCtokens = balanceOfCToken();
 
         bool all;
@@ -486,7 +489,7 @@ contract GenericIronBank is GenericLenderBase {
             } else {
                 //redo or else price changes
                 cToken.mint(0);
-                liquidityInCTokens = convertFromUnderlying(want.balanceOf(address(cToken)));
+                liquidityInCTokens = _convertFromUnderlying(want.balanceOf(address(cToken)));
                 //take all we can
                 all = false;
                 cToken.redeem(liquidityInCTokens);
@@ -501,7 +504,7 @@ contract GenericIronBank is GenericLenderBase {
 
     }
 
-    function convertFromUnderlying(uint256 amountOfUnderlying) public view returns (uint256 balance){
+    function _convertFromUnderlying(uint256 amountOfUnderlying) internal view returns (uint256 balance){
         if (amountOfUnderlying == 0) {
             balance = 0;
         } else {

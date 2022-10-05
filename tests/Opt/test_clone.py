@@ -20,7 +20,6 @@ def test_v3_clone(
     assert plugin.want() == new_plugin.want()
     assert plugin.lenderName() == new_plugin.lenderName()
     assert plugin.cToken() == new_plugin.cToken()
-    assert new_plugin.WNATIVE() == weth.address
     assert new_plugin.apr() == plugin.apr()
     assert new_plugin.ignorePrinting() == True
 
@@ -45,7 +44,6 @@ def test_clone_trigger(
     assert plugin.want() == new_plugin.want()
     assert plugin.lenderName() == new_plugin.lenderName()
     assert plugin.cToken() == new_plugin.cToken()
-    assert new_plugin.WNATIVE() == weth.address
     assert new_plugin.apr() == plugin.apr()
     vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from":gov})
     strategy.addLender(new_plugin, {"from": gov})
@@ -76,8 +74,6 @@ def test_clone_usdc(
     assert usdc == new_plugin.want()
     assert plugin.lenderName() == new_plugin.lenderName()
     assert plugin.ignorePrinting() == new_plugin.ignorePrinting()
-    #assert plugin.cToken() == new_plugin.cToken()
-    assert new_plugin.WNATIVE() == weth.address
     assert new_plugin.apr() > 0
     
 def test_clone_harvest(
