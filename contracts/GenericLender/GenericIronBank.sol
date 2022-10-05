@@ -162,8 +162,16 @@ contract GenericIronBank is GenericLenderBase {
         keep3r = _keep3r;
     }
 
+    function balanceOfWant() public view returns(uint256) {
+        return want.balanceOf(address(this));
+    }
+
+    function balanceOfCToken() public view returns(uint256) {
+        return cToken.balanceOf(address(this));
+    }
+
     function _nav() internal view returns (uint256) {
-        uint256 amount = want.balanceOf(address(this)).add(underlyingBalanceStored());
+        uint256 amount = balanceOfWant().add(underlyingBalanceStored());
 
         if(amount < dustThreshold){
             return 0;
@@ -173,7 +181,7 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function underlyingBalanceStored() public view returns (uint256 balance) {
-        uint256 currentCr = cToken.balanceOf(address(this)).add(stakedBalance());
+        uint256 currentCr = balanceOfCToken().add(stakedBalance());
         if (currentCr < dustThreshold) {
             balance = 0;
         } else {
@@ -193,10 +201,10 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function _apr() internal view returns (uint256) {
-        return (cToken.supplyRatePerBlock().add(compBlockShareInWant(0, false))).mul(blocksPerYear);
+        return (cToken.supplyRatePerBlock().add(compBlockShareInWant(0))).mul(blocksPerYear);
     }
 
-    function compBlockShareInWant(uint256 change, bool add) public view returns (uint256){
+    function compBlockShareInWant(uint256 change) public view returns (uint256){
 
         if(ignorePrinting){
             return 0;
@@ -208,22 +216,18 @@ contract GenericIronBank is GenericLenderBase {
         uint256 distributionPerSec = stakingRewards.getRewardRate(ib);
         //convert to per dolla
         uint256 totalStaked = stakingRewards.totalSupply().mul(cToken.exchangeRateStored()).div(1e18);
-        if(add){
-            totalStaked = totalStaked.add(change);
-        }else{
-            totalStaked = totalStaked.sub(change);
-        }
+        
+        totalStaked = totalStaked.add(change);
 
-        uint256 blockShareSupply = 0;
+        uint256 blockShareSupply;
         if(totalStaked > 0){
             blockShareSupply = distributionPerSec.mul(1e18).div(totalStaked);
         }
 
-        uint256 estimatedWant =  priceCheck(ib, address(want),blockShareSupply);
+        uint256 estimatedWant = priceCheck(ib, address(want), blockShareSupply);
         uint256 compRate;
         if(estimatedWant != 0){
             compRate = estimatedWant.mul(9).div(10); //10% pessimist
-
         }
 
         return(compRate);
@@ -254,7 +258,7 @@ contract GenericIronBank is GenericLenderBase {
         unStake(convertFromUnderlying(amount));
         cToken.redeemUnderlying(amount);
 
-        want.safeTransfer(vault.governance(), want.balanceOf(address(this)));
+        want.safeTransfer(vault.governance(), balanceOfWant());
     }
 
     //withdraw an amount including any want balance
@@ -263,16 +267,16 @@ contract GenericIronBank is GenericLenderBase {
         cToken.accrueInterest();
         //This should be accurate due to previous call
         uint256 balanceUnderlying = underlyingBalanceStored();
-        uint256 looseBalance = want.balanceOf(address(this));
+        uint256 looseBalance = balanceOfWant();
         uint256 total = balanceUnderlying.add(looseBalance);
 
-        if (amount.add(dustThreshold) >= total) {
+        if (amount >= total) {
             //cant withdraw more than we own. so withdraw all we can
             if(balanceUnderlying > dustThreshold){
                 unStake(stakedBalance());
-                require(cToken.redeem(cToken.balanceOf(address(this))) == 0, "ctoken: redeemAll fail");
+                require(cToken.redeem(balanceOfCToken()) == 0, "ctoken: redeemAll fail");
             }
-            looseBalance = want.balanceOf(address(this));
+            looseBalance = balanceOfWant();
             if(looseBalance > 0 ){
                 want.safeTransfer(address(strategy), looseBalance);
                 return looseBalance;
@@ -296,14 +300,13 @@ contract GenericIronBank is GenericLenderBase {
             if (toWithdraw > liquidity) {
                 toWithdraw = liquidity;
             }
-            if(toWithdraw > dustThreshold){
+            if(toWithdraw > 0){
                 unStake(convertFromUnderlying(toWithdraw));
                 require(cToken.redeemUnderlying(toWithdraw) == 0, "ctoken: redeemUnderlying fail");
             }
-
         }
 
-        looseBalance = want.balanceOf(address(this));
+        looseBalance = balanceOfWant();
         want.safeTransfer(address(strategy), looseBalance);
         return looseBalance;
     }
@@ -315,7 +318,7 @@ contract GenericIronBank is GenericLenderBase {
     function harvest() external keepers {
         _disposeOfComp();
 
-        uint256 wantBalance = want.balanceOf(address(this));
+        uint256 wantBalance = balanceOfWant();
         if(wantBalance > 0) {
             cToken.mint(wantBalance);
         }
@@ -441,13 +444,13 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function deposit() external override management {
-        uint256 balance = want.balanceOf(address(this));
+        uint256 balance = balanceOfWant();
         require(cToken.mint(balance) == 0, "ctoken: mint fail");
         stake();
     }
 
     function stake() internal {
-        uint256 balance = cToken.balanceOf(address(this));
+        uint256 balance = balanceOfCToken();
         if(address(stakingRewards) == address(0) || balance == 0) return;
 
         stakingRewards.stake(balance);
@@ -469,7 +472,7 @@ contract GenericIronBank is GenericLenderBase {
         uint256 liquidity = want.balanceOf(address(cToken));
         uint256 liquidityInCTokens = convertFromUnderlying(liquidity);
         unStake(stakedBalance());
-        uint256 amountInCtokens = cToken.balanceOf(address(this));
+        uint256 amountInCtokens = balanceOfCToken();
 
         bool all;
 
@@ -490,7 +493,7 @@ contract GenericIronBank is GenericLenderBase {
             }
         }
 
-        uint256 looseBalance = want.balanceOf(address(this));
+        uint256 looseBalance = balanceOfWant();
         if(looseBalance > 0){
             want.safeTransfer(address(strategy), looseBalance);
         }
@@ -507,7 +510,7 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function hasAssets() external view override returns (bool) {
-        return underlyingBalanceStored() > dustThreshold || want.balanceOf(address(this)) > 0;
+        return underlyingBalanceStored() > 0 || balanceOfWant() > 0;
     }
 
     function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
@@ -523,7 +526,7 @@ contract GenericIronBank is GenericLenderBase {
 
         //the supply rate is derived from the borrow rate, reserve factor and the amount of total borrows.
         uint256 supplyRate = model.getSupplyRate(cashPrior.add(amount), borrows, reserves, reserverFactor);
-        supplyRate = supplyRate.add(compBlockShareInWant(amount, true));
+        supplyRate = supplyRate.add(compBlockShareInWant(amount));
 
         return supplyRate.mul(blocksPerYear);
     }
