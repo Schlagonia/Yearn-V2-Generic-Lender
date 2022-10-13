@@ -346,11 +346,11 @@ contract GenericIronBank is GenericLenderBase {
         uint256 _ib = IERC20(ib).balanceOf(address(this));
 
         if (_ib > minIbToSell && tradeFactory == address(0)) {
-            _swapFrom(ib, address(want), _ib);
+            _swapFrom(_ib);
         }
     }
 
-    function _swapFrom(address _from, address _to, uint256 _amountIn) internal{
+    function _swapFrom(uint256 _amountIn) internal{
         IBalancerVault.BatchSwapStep[] memory swaps;
         IAsset[] memory assets;
         int[] memory limits;
