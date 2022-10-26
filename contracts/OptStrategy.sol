@@ -32,6 +32,11 @@ contract OptStrategy is BaseStrategy {
     uint256 public withdrawalThreshold = 1e12;
     uint256 public constant SECONDSPERYEAR = 31556952;
 
+    // in bips - basis points, 100 = 1%
+    uint256 public marginApr = 1000;
+    // 10000 = 100%
+    uint256 public constant BASE_MARGIN_APR = 10000;
+
     IGenericLender[] public lenders;
     bool public externalOracle; // default is false
     address public wantToEthOracle;
@@ -362,7 +367,7 @@ contract OptStrategy is BaseStrategy {
 
             uint256 amountToFree = _profit.add(_debtPayment);
             //we need to add outstanding to our profit
-            //dont need to do logic if there is nothiing to free
+            //dont need to do logic if there is nothing to free
             if (amountToFree > 0 && looseAssets < amountToFree) {
                 //withdraw what we can withdraw
                 _withdrawSome(amountToFree.sub(looseAssets));
@@ -404,33 +409,35 @@ contract OptStrategy is BaseStrategy {
 
     /*
      * Key logic.
-     *   The algorithm moves assets from lowest return to highest
-     *   like a very slow idiots bubble sort
-     *   we ignore debt outstanding for an easy life
+     *   The algorithm moves assets from the lower return lenders to the higher in iterations.
+     *   The adjustment loop stops when the lowest APR is the margin of the highest.
      */
     function adjustPosition(uint256 _debtOutstanding) internal override {
-        _debtOutstanding; //ignored. we handle it in prepare return
-        //emergency exit is dealt with at beginning of harvest
-        if (emergencyExit) {
+        //emergency exit is dealt with at beginning of harvest, cannot adjust 1 lender
+        if (emergencyExit || lenders.length < 2) {
             return;
         }
 
-        //we just keep all money in want if we dont have any lenders
-        if (lenders.length == 0) {
-            return;
-        }
+        // don't adjust the lender with the highest apy
+        uint256 maxNumberOfAdjustments = lenders.length - 1;
+        for (uint256 i = 0; i < maxNumberOfAdjustments; i++) {
+            // TODO: calculate estimated without _debtOutstanding
+            (uint256 lowest, uint256 lowestApr, uint256 highest, uint256 potential) = estimateAdjustPosition();
+            // potentialApr > lowestApr * (1 + margin in %)
+            if (potential > lowestApr.mul(BASE_MARGIN_APR.add(marginApr)).div(BASE_MARGIN_APR)) {
+                // new APR must be higher for at least a defined margin than the current APR
+                lenders[lowest].withdrawAll();
+            } else {
+                // quit adjustments when lowest APR is below the margin, others will be also
+                break;
+            }
 
-        (uint256 lowest, uint256 lowestApr, uint256 highest, uint256 potential) = estimateAdjustPosition();
-
-        if (potential > lowestApr) {
-            //apr should go down after deposit so wont be withdrawing from self
-            lenders[lowest].withdrawAll();
-        }
-
-        uint256 bal = want.balanceOf(address(this));
-        if (bal > 0) {
-            want.safeTransfer(address(lenders[highest]), bal);
-            lenders[highest].deposit();
+            uint256 bal = want.balanceOf(address(this));
+            if (bal > _debtOutstanding) {
+                // TODO: deposit only amount above _debtOutstanding, after changing the estimate calculation
+                want.safeTransfer(address(lenders[highest]), bal);
+                lenders[highest].deposit();
+            }
         }
     }
 
