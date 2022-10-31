@@ -20,6 +20,7 @@ def test_rewards(chain,
     GenericCompoundV3,
     gasOracle,
     strategist_ms,
+    comp,
     cUsdc):
 
     starting_balance = usdc.balanceOf(strategist)
@@ -66,7 +67,6 @@ def test_rewards(chain,
     plugin.setUniFees(3000, 500, {"from": strategist})
 
     #send come comp to the strategy
-    comp = interface.ERC20(plugin.comp())
     toSend = 10 * (10 **18)
     comp.transfer(plugin.address, toSend, {"from": whale})
     assert comp.balanceOf(plugin.address) == toSend     
@@ -108,6 +108,7 @@ def test_no_rewards(
     strategy,
     GenericCompoundV3,
     aUsdc,
+    comp
 ):
     starting_balance = usdc.balanceOf(strategist)
     currency = usdc
@@ -150,7 +151,7 @@ def test_no_rewards(
 
     assert plugin.harvestTrigger(10) == False
     assert plugin.getRewardsOwed() == 0
-    assert plugin.getRewardAprForSupplyBase(plugin.getPriceFeedAddress(plugin.comp()), 0) == 0
+    assert plugin.getRewardAprForSupplyBase(plugin.getPriceFeedAddress(comp), 0) == 0
 
     #should still be able to call harvest
     plugin.harvest({"from": strategist})
@@ -239,6 +240,7 @@ def test_trade_factory(chain,
     trade_factory,
     weth,
     guardian,
+    comp,
     cUsdc):
 
     starting_balance = usdc.balanceOf(strategist)
@@ -282,7 +284,6 @@ def test_trade_factory(chain,
     strategy.harvest({"from": strategist})
 
     #send come comp to the strategy
-    comp = interface.ERC20(plugin.comp())
     toSend = 10 * (10 **18)
     comp.transfer(plugin.address, toSend, {"from": whale})
     assert comp.balanceOf(plugin.address) == toSend     

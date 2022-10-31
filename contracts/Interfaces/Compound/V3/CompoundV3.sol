@@ -49,6 +49,12 @@ library CometStructs {
     uint128 totalSupplyAsset;
     uint128 _reserved;
   }
+
+  struct RewardConfig {
+    address token;
+    uint64 rescaleFactor;
+    bool shouldUpscale;
+  }
 }
 
 interface Comet is IERC20 {
@@ -95,4 +101,7 @@ interface Comet is IERC20 {
 interface CometRewards {
   function getRewardOwed(address comet, address account) external returns (CometStructs.RewardOwed memory);
   function claim(address comet, address src, bool shouldAccrue) external;
+  
+  function rewardsClaimed(address comet, address account) external view returns(uint256);
+  function rewardConfig(address comet) external view returns (CometStructs.RewardConfig memory);
 }

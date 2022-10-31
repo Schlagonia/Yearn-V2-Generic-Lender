@@ -146,6 +146,9 @@ def crUsdc(interface):
 def aUsdc(interface):
     yield interface.IAToken("0xBcca60bB61934080951369a648Fb03DF4F96263C")
 
+@pytest.fixture
+def comp(interface):
+    yield interface.ERC20("0xc00e94Cb662C3520282E6f5717214004A7f26888")
 
 @pytest.fixture(scope="module", autouse=True)
 def shared_setup(module_isolation):

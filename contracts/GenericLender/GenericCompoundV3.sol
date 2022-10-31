@@ -37,15 +37,15 @@ contract GenericCompoundV3 is GenericLenderBase {
     uint internal constant SECONDS_PER_YEAR = 365 days;
 
     //Rewards stuff
-    // Uniswap v3 router
+    //Uniswap v3 router
     ISwapRouter internal constant router =
         ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
     //Fees for the V3 pools if the supply is incentivized
     uint24 public compToEthFee;
     uint24 public ethToWantFee;
-    address public constant comp = 
+    address internal constant comp = 
         0xc00e94Cb662C3520282E6f5717214004A7f26888;
-    address public constant weth = 
+    address internal constant weth = 
         0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address public tradeFactory;
 
@@ -53,8 +53,8 @@ contract GenericCompoundV3 is GenericLenderBase {
     CometRewards public constant rewardsContract = 
         CometRewards(0x1B0e765F6224C21223AeA2af16c1C46E38885a40); 
 
-    uint public BASE_MANTISSA;
-    uint public BASE_INDEX_SCALE;
+    uint internal BASE_MANTISSA;
+    uint internal BASE_INDEX_SCALE;
 
     uint256 public minCompToSell;
     uint256 public minRewardToHarvest;
@@ -145,10 +145,8 @@ contract GenericCompoundV3 is GenericLenderBase {
         uint rewardTokenPriceInUsd = getCompoundPrice(rewardTokenPriceFeed);
         uint wantPriceInUsd = getCompoundPrice(comet.baseTokenPriceFeed());
         uint wantTotalSupply = comet.totalSupply().add(newAmount);
-        uint baseTrackingSupplySpeed = comet.baseTrackingSupplySpeed();
-        uint rewardToSuppliersPerDay = baseTrackingSupplySpeed * SECONDS_PER_DAY * (BASE_INDEX_SCALE / BASE_MANTISSA);
-        uint supplyBaseRewardApr = (rewardTokenPriceInUsd * rewardToSuppliersPerDay / (wantTotalSupply * wantPriceInUsd)) * DAYS_PER_YEAR;
-        return supplyBaseRewardApr;
+        uint rewardToSuppliersPerDay = comet.baseTrackingSupplySpeed() * SECONDS_PER_DAY * BASE_INDEX_SCALE / BASE_MANTISSA;
+        return (rewardTokenPriceInUsd * rewardToSuppliersPerDay / (wantTotalSupply * wantPriceInUsd)) * DAYS_PER_YEAR;
     }
 
     function getPriceFeedAddress(address asset) public view returns (address) {
@@ -169,7 +167,13 @@ contract GenericCompoundV3 is GenericLenderBase {
     }
 
     //emergency withdraw. sends balance plus amount to governance
+    //Pass in uint256.max to withdraw everything
     function emergencyWithdraw(uint256 amount) external override onlyGovernance {
+        if(amount == type(uint256).max) {
+            //Accrue account to get the most accurate amount
+            comet.accrueAccount(address(this));
+            amount = comet.balanceOf(address(this));
+        }
         //dont care about errors here. we want to exit what we can
         comet.withdraw(address(want), amount);
 
@@ -178,9 +182,9 @@ contract GenericCompoundV3 is GenericLenderBase {
 
     //withdraw an amount including any want balance
     function _withdraw(uint256 amount) internal returns (uint256) { 
-        //Accrue rewards and interest to the lender
+        //Accrue rewards and interest to the lender so all following calls are acurate
         comet.accrueAccount(address(this));
-        uint256 balanceUnderlying = comet.balanceOf(address(this));
+        uint256 balanceUnderlying = underlyingBalanceStored();
         uint256 looseBalance = want.balanceOf(address(this));
         uint256 total = balanceUnderlying.add(looseBalance);
 
@@ -213,7 +217,7 @@ contract GenericCompoundV3 is GenericLenderBase {
     }
 
     function harvest() external keepers {
-        claimCometRewards();
+        _claimCometRewards();
 
         _disposeOfComp();
 
@@ -228,24 +232,40 @@ contract GenericCompoundV3 is GenericLenderBase {
 
         if(getRewardsOwed().add(IERC20(comp).balanceOf(address(this))) >= minRewardToHarvest) return true;
     }
-    
+  
     /*
     * Gets the amount of reward tokens due to this contract address
     */
     function getRewardsOwed() public view returns (uint) {
-        return comet.userBasic(address(this)).baseTrackingAccrued;
+        CometStructs.RewardConfig memory config = rewardsContract.rewardConfig(address(comet));
+        uint256 accrued = comet.baseTrackingAccrued(address(this));
+        if (config.shouldUpscale) {
+            accrued *= config.rescaleFactor;
+        } else {
+            accrued /= config.rescaleFactor;
+        }
+        uint256 claimed = rewardsContract.rewardsClaimed(address(comet), address(this));
+
+        return accrued > claimed ? accrued - claimed : 0;
+    }
+
+    /*
+    * External function that Claims the reward tokens due to this contract address
+    */
+    function claimCometRewards() external keepers {
+        _claimCometRewards();
     }
 
     /*
     * Claims the reward tokens due to this contract address
     */
-    function claimCometRewards() internal {
+    function _claimCometRewards() internal {
         rewardsContract.claim(address(comet), address(this), true);
     }
 
     function _disposeOfComp() internal {
         //check for Trade Factory implementation or that Uni fees are not set
-        if(tradeFactory != address(0) || ethToWantFee == 0) return;
+        if(tradeFactory != address(0) || compToEthFee == 0) return;
 
         uint256 _comp = IERC20(comp).balanceOf(address(this));
 
@@ -297,6 +317,7 @@ contract GenericCompoundV3 is GenericLenderBase {
     }
 
     function withdrawAll() external override management returns (bool) {
+        comet.accrueAccount(address(this));
         uint256 invested = _nav();
         uint256 returned = _withdraw(invested);
         return returned >= invested;
