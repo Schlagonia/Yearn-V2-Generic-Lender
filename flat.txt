@@ -140,11 +140,29 @@ library Address {
     }
 }
 
-// File: IAsset.sol
+// File: Context.sol
 
-interface IAsset {
-    // solhint-disable-previous-line no-empty-blocks
+/*
+ * @dev Provides information about the current execution context, including the
+ * sender of the transaction and its data. While these are generally available
+ * via msg.sender and msg.data, they should not be accessed in such a direct
+ * manner, since when dealing with GSN meta-transactions the account sending and
+ * paying for execution may not be the actual sender (as far as an application
+ * is concerned).
+ *
+ * This contract is only required for intermediate, library-like contracts.
+ */
+abstract contract Context {
+    function _msgSender() internal view virtual returns (address payable) {
+        return msg.sender;
+    }
+
+    function _msgData() internal view virtual returns (bytes memory) {
+        this; // silence state mutability warning without generating bytecode - see https://github.com/ethereum/solidity/issues/2691
+        return msg.data;
+    }
 }
+
 // File: IERC20.sol
 
 /**
@@ -251,118 +269,12 @@ interface IGenericLender {
     function sweep(address _token) external;
 }
 
-// File: IStakingRewards.sol
+// File: IWantToEth.sol
 
-interface IStakingRewards {
-    function totalSupply() external view returns (uint256);
+interface IWantToEth {
+    function wantToEth(uint256 input) external view returns (uint256);
 
-    function balanceOf(address account) external view returns (uint256);
-
-    function lastTimeRewardApplicable(address _rewardsToken)
-        external
-        view
-        returns (uint256);
-
-    function rewardPerToken(address _rewardsToken)
-        external
-        view
-        returns (uint256);
-
-    function earned(address _rewardsToken, address account)
-        external
-        view
-        returns (uint256);
-
-    function getRewardRate(address _rewardsToken)
-        external
-        view
-        returns (uint256);
-
-    function getRewardForDuration(address _rewardsToken)
-        external
-        view
-        returns (uint256);
-
-    function getRewardsTokenCount() external view returns (uint256);
-
-    function getAllRewardsTokens() external view returns (address[] memory);
-
-    function getStakingToken() external view returns (address);
-
-    function stake(uint256 amount) external;
-
-    function stakeFor(address account, uint256 amount) external;
-
-    function withdraw(uint256 amount) external;
-
-    function withdrawFor(address account, uint256 amount) external;
-
-    function getReward() external;
-
-    function getRewardFor(address account) external;
-
-    function exit() external;
-
-    function periodFinish() external view returns(uint256);
-}
-// File: IStakingRewardsFactory.sol
-
-interface IStakingRewardsFactory {
-    function getStakingRewardsCount() external view returns (uint256);
-
-    function getAllStakingRewards() external view returns (address[] memory);
-
-    function getStakingRewards(address stakingToken)
-        external
-        view
-        returns (address);
-
-    function getStakingToken(address underlying)
-        external
-        view
-        returns (address);
-}
-// File: ITradeFactory.sol
-
-// Feel free to change the license, but this is what we use
-
-interface ITradeFactory {
-    function enable(address, address) external;
-
-    function grantRole(bytes32 role, address account) external;
-
-    function STRATEGY() external view returns (bytes32);
-}
-// File: InterestRateModel.sol
-
-interface InterestRateModel {
-    /**
-     * @notice Calculates the current borrow interest rate per block
-     * @param cash The total amount of cash the market has
-     * @param borrows The total amount of borrows the market has outstanding
-     * @param reserves The total amount of reserves the market has
-     * @return The borrow rate per block (as a percentage, and scaled by 1e18)
-     */
-    function getBorrowRate(
-        uint256 cash,
-        uint256 borrows,
-        uint256 reserves
-    ) external view returns (uint256, uint256);
-
-    /**
-     * @notice Calculates the current supply interest rate per block
-     * @param cash The total amount of cash the market has
-     * @param borrows The total amount of borrows the market has outstanding
-     * @param reserves The total amount of reserves the market has
-     * @param reserveFactorMantissa The current reserve factor the market has
-     * @return The supply rate per block (as a percentage, and scaled by 1e18)
-     */
-    function getSupplyRate(
-        uint256 cash,
-        uint256 borrows,
-        uint256 reserves,
-        uint256 reserveFactorMantissa
-    ) external view returns (uint256);
+    function ethToWant(uint256 input) external view returns (uint256);
 }
 
 // File: Math.sol
@@ -553,322 +465,307 @@ library SafeMath {
     }
 }
 
-// File: CTokenI.sol
+// File: ERC20.sol
 
-interface CTokenI {
-    /*** Market Events ***/
+/**
+ * @dev Implementation of the {IERC20} interface.
+ *
+ * This implementation is agnostic to the way tokens are created. This means
+ * that a supply mechanism has to be added in a derived contract using {_mint}.
+ * For a generic mechanism see {ERC20PresetMinterPauser}.
+ *
+ * TIP: For a detailed writeup see our guide
+ * https://forum.zeppelin.solutions/t/how-to-implement-erc20-supply-mechanisms/226[How
+ * to implement supply mechanisms].
+ *
+ * We have followed general OpenZeppelin guidelines: functions revert instead
+ * of returning `false` on failure. This behavior is nonetheless conventional
+ * and does not conflict with the expectations of ERC20 applications.
+ *
+ * Additionally, an {Approval} event is emitted on calls to {transferFrom}.
+ * This allows applications to reconstruct the allowance for all accounts just
+ * by listening to said events. Other implementations of the EIP may not emit
+ * these events, as it isn't required by the specification.
+ *
+ * Finally, the non-standard {decreaseAllowance} and {increaseAllowance}
+ * functions have been added to mitigate the well-known issues around setting
+ * allowances. See {IERC20-approve}.
+ */
+contract ERC20 is Context, IERC20 {
+    using SafeMath for uint256;
+    using Address for address;
 
-    /**
-     * @notice Event emitted when interest is accrued
-     */
-    event AccrueInterest(uint256 cashPrior, uint256 interestAccumulated, uint256 borrowIndex, uint256 totalBorrows);
+    mapping (address => uint256) private _balances;
 
-    /**
-     * @notice Event emitted when tokens are minted
-     */
-    event Mint(address minter, uint256 mintAmount, uint256 mintTokens);
+    mapping (address => mapping (address => uint256)) private _allowances;
 
-    /**
-     * @notice Event emitted when tokens are redeemed
-     */
-    event Redeem(address redeemer, uint256 redeemAmount, uint256 redeemTokens);
+    uint256 private _totalSupply;
 
-    /**
-     * @notice Event emitted when underlying is borrowed
-     */
-    event Borrow(address borrower, uint256 borrowAmount, uint256 accountBorrows, uint256 totalBorrows);
-
-    /**
-     * @notice Event emitted when a borrow is repaid
-     */
-    event RepayBorrow(address payer, address borrower, uint256 repayAmount, uint256 accountBorrows, uint256 totalBorrows);
-
-    /**
-     * @notice Event emitted when a borrow is liquidated
-     */
-    event LiquidateBorrow(address liquidator, address borrower, uint256 repayAmount, address cTokenCollateral, uint256 seizeTokens);
-
-    /*** Admin Events ***/
-
-    /**
-     * @notice Event emitted when pendingAdmin is changed
-     */
-    event NewPendingAdmin(address oldPendingAdmin, address newPendingAdmin);
+    string private _name;
+    string private _symbol;
+    uint8 private _decimals;
 
     /**
-     * @notice Event emitted when pendingAdmin is accepted, which means admin is updated
+     * @dev Sets the values for {name} and {symbol}, initializes {decimals} with
+     * a default value of 18.
+     *
+     * To select a different value for {decimals}, use {_setupDecimals}.
+     *
+     * All three of these values are immutable: they can only be set once during
+     * construction.
      */
-    event NewAdmin(address oldAdmin, address newAdmin);
+    constructor (string memory name, string memory symbol) public {
+        _name = name;
+        _symbol = symbol;
+        _decimals = 18;
+    }
 
     /**
-     * @notice Event emitted when the reserve factor is changed
+     * @dev Returns the name of the token.
      */
-    event NewReserveFactor(uint256 oldReserveFactorMantissa, uint256 newReserveFactorMantissa);
+    function name() public view returns (string memory) {
+        return _name;
+    }
 
     /**
-     * @notice Event emitted when the reserves are added
+     * @dev Returns the symbol of the token, usually a shorter version of the
+     * name.
      */
-    event ReservesAdded(address benefactor, uint256 addAmount, uint256 newTotalReserves);
+    function symbol() public view returns (string memory) {
+        return _symbol;
+    }
 
     /**
-     * @notice Event emitted when the reserves are reduced
+     * @dev Returns the number of decimals used to get its user representation.
+     * For example, if `decimals` equals `2`, a balance of `505` tokens should
+     * be displayed to a user as `5,05` (`505 / 10 ** 2`).
+     *
+     * Tokens usually opt for a value of 18, imitating the relationship between
+     * Ether and Wei. This is the value {ERC20} uses, unless {_setupDecimals} is
+     * called.
+     *
+     * NOTE: This information is only used for _display_ purposes: it in
+     * no way affects any of the arithmetic of the contract, including
+     * {IERC20-balanceOf} and {IERC20-transfer}.
      */
-    event ReservesReduced(address admin, uint256 reduceAmount, uint256 newTotalReserves);
+    function decimals() public view returns (uint8) {
+        return _decimals;
+    }
 
     /**
-     * @notice EIP20 Transfer event
+     * @dev See {IERC20-totalSupply}.
      */
-    event Transfer(address indexed from, address indexed to, uint256 amount);
+    function totalSupply() public view override returns (uint256) {
+        return _totalSupply;
+    }
 
     /**
-     * @notice EIP20 Approval event
+     * @dev See {IERC20-balanceOf}.
      */
-    event Approval(address indexed owner, address indexed spender, uint256 amount);
+    function balanceOf(address account) public view override returns (uint256) {
+        return _balances[account];
+    }
 
     /**
-     * @notice Failure event
+     * @dev See {IERC20-transfer}.
+     *
+     * Requirements:
+     *
+     * - `recipient` cannot be the zero address.
+     * - the caller must have a balance of at least `amount`.
      */
-    event Failure(uint256 error, uint256 info, uint256 detail);
+    function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
+        _transfer(_msgSender(), recipient, amount);
+        return true;
+    }
 
-    function transfer(address dst, uint256 amount) external returns (bool);
+    /**
+     * @dev See {IERC20-allowance}.
+     */
+    function allowance(address owner, address spender) public view virtual override returns (uint256) {
+        return _allowances[owner][spender];
+    }
 
-    function transferFrom(
-        address src,
-        address dst,
-        uint256 amount
-    ) external returns (bool);
+    /**
+     * @dev See {IERC20-approve}.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     */
+    function approve(address spender, uint256 amount) public virtual override returns (bool) {
+        _approve(_msgSender(), spender, amount);
+        return true;
+    }
 
-    function approve(address spender, uint256 amount) external returns (bool);
+    /**
+     * @dev See {IERC20-transferFrom}.
+     *
+     * Emits an {Approval} event indicating the updated allowance. This is not
+     * required by the EIP. See the note at the beginning of {ERC20};
+     *
+     * Requirements:
+     * - `sender` and `recipient` cannot be the zero address.
+     * - `sender` must have a balance of at least `amount`.
+     * - the caller must have allowance for ``sender``'s tokens of at least
+     * `amount`.
+     */
+    function transferFrom(address sender, address recipient, uint256 amount) public virtual override returns (bool) {
+        _transfer(sender, recipient, amount);
+        _approve(sender, _msgSender(), _allowances[sender][_msgSender()].sub(amount, "ERC20: transfer amount exceeds allowance"));
+        return true;
+    }
 
-    function allowance(address owner, address spender) external view returns (uint256);
+    /**
+     * @dev Atomically increases the allowance granted to `spender` by the caller.
+     *
+     * This is an alternative to {approve} that can be used as a mitigation for
+     * problems described in {IERC20-approve}.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     */
+    function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
+        _approve(_msgSender(), spender, _allowances[_msgSender()][spender].add(addedValue));
+        return true;
+    }
 
-    function balanceOf(address owner) external view returns (uint256);
+    /**
+     * @dev Atomically decreases the allowance granted to `spender` by the caller.
+     *
+     * This is an alternative to {approve} that can be used as a mitigation for
+     * problems described in {IERC20-approve}.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     * - `spender` must have allowance for the caller of at least
+     * `subtractedValue`.
+     */
+    function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
+        _approve(_msgSender(), spender, _allowances[_msgSender()][spender].sub(subtractedValue, "ERC20: decreased allowance below zero"));
+        return true;
+    }
 
-    function balanceOfUnderlying(address owner) external returns (uint256);
+    /**
+     * @dev Moves tokens `amount` from `sender` to `recipient`.
+     *
+     * This is internal function is equivalent to {transfer}, and can be used to
+     * e.g. implement automatic token fees, slashing mechanisms, etc.
+     *
+     * Emits a {Transfer} event.
+     *
+     * Requirements:
+     *
+     * - `sender` cannot be the zero address.
+     * - `recipient` cannot be the zero address.
+     * - `sender` must have a balance of at least `amount`.
+     */
+    function _transfer(address sender, address recipient, uint256 amount) internal virtual {
+        require(sender != address(0), "ERC20: transfer from the zero address");
+        require(recipient != address(0), "ERC20: transfer to the zero address");
 
-    function getAccountSnapshot(address account)
-        external
-        view
-        returns (
-            uint256,
-            uint256,
-            uint256,
-            uint256
-        );
+        _beforeTokenTransfer(sender, recipient, amount);
 
-    function borrowRatePerBlock() external view returns (uint256);
+        _balances[sender] = _balances[sender].sub(amount, "ERC20: transfer amount exceeds balance");
+        _balances[recipient] = _balances[recipient].add(amount);
+        emit Transfer(sender, recipient, amount);
+    }
 
-    function supplyRatePerBlock() external view returns (uint256);
+    /** @dev Creates `amount` tokens and assigns them to `account`, increasing
+     * the total supply.
+     *
+     * Emits a {Transfer} event with `from` set to the zero address.
+     *
+     * Requirements
+     *
+     * - `to` cannot be the zero address.
+     */
+    function _mint(address account, uint256 amount) internal virtual {
+        require(account != address(0), "ERC20: mint to the zero address");
 
-    function totalBorrowsCurrent() external returns (uint256);
+        _beforeTokenTransfer(address(0), account, amount);
 
-    function borrowBalanceCurrent(address account) external returns (uint256);
+        _totalSupply = _totalSupply.add(amount);
+        _balances[account] = _balances[account].add(amount);
+        emit Transfer(address(0), account, amount);
+    }
 
-    function borrowBalanceStored(address account) external view returns (uint256);
+    /**
+     * @dev Destroys `amount` tokens from `account`, reducing the
+     * total supply.
+     *
+     * Emits a {Transfer} event with `to` set to the zero address.
+     *
+     * Requirements
+     *
+     * - `account` cannot be the zero address.
+     * - `account` must have at least `amount` tokens.
+     */
+    function _burn(address account, uint256 amount) internal virtual {
+        require(account != address(0), "ERC20: burn from the zero address");
 
-    function exchangeRateCurrent() external returns (uint256);
+        _beforeTokenTransfer(account, address(0), amount);
 
-    function accrualBlockNumber() external view returns (uint256);
+        _balances[account] = _balances[account].sub(amount, "ERC20: burn amount exceeds balance");
+        _totalSupply = _totalSupply.sub(amount);
+        emit Transfer(account, address(0), amount);
+    }
 
-    function exchangeRateStored() external view returns (uint256);
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the `owner`s tokens.
+     *
+     * This is internal function is equivalent to `approve`, and can be used to
+     * e.g. set automatic allowances for certain subsystems, etc.
+     *
+     * Emits an {Approval} event.
+     *
+     * Requirements:
+     *
+     * - `owner` cannot be the zero address.
+     * - `spender` cannot be the zero address.
+     */
+    function _approve(address owner, address spender, uint256 amount) internal virtual {
+        require(owner != address(0), "ERC20: approve from the zero address");
+        require(spender != address(0), "ERC20: approve to the zero address");
 
-    function getCash() external view returns (uint256);
+        _allowances[owner][spender] = amount;
+        emit Approval(owner, spender, amount);
+    }
 
-    function accrueInterest() external returns (uint256);
+    /**
+     * @dev Sets {decimals} to a value other than the default one of 18.
+     *
+     * WARNING: This function should only be called from the constructor. Most
+     * applications that interact with token contracts will not expect
+     * {decimals} to ever change, and may work incorrectly if it does.
+     */
+    function _setupDecimals(uint8 decimals_) internal {
+        _decimals = decimals_;
+    }
 
-    function interestRateModel() external view returns (InterestRateModel);
-
-    function totalReserves() external view returns (uint256);
-
-    function reserveFactorMantissa() external view returns (uint256);
-
-    function seize(
-        address liquidator,
-        address borrower,
-        uint256 seizeTokens
-    ) external returns (uint256);
-
-    function totalBorrows() external view returns (uint256);
-
-    function totalSupply() external view returns (uint256);
+    /**
+     * @dev Hook that is called before any transfer of tokens. This includes
+     * minting and burning.
+     *
+     * Calling conditions:
+     *
+     * - when `from` and `to` are both non-zero, `amount` of ``from``'s tokens
+     * will be to transferred to `to`.
+     * - when `from` is zero, `amount` tokens will be minted for `to`.
+     * - when `to` is zero, `amount` of ``from``'s tokens will be burned.
+     * - `from` and `to` are never both zero.
+     *
+     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
+     */
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual { }
 }
 
-// File: IBalancerVault.sol
-
-interface IBalancerVault {
-    enum PoolSpecialization {GENERAL, MINIMAL_SWAP_INFO, TWO_TOKEN}
-    enum JoinKind {INIT, EXACT_TOKENS_IN_FOR_BPT_OUT, TOKEN_IN_FOR_EXACT_BPT_OUT, ALL_TOKENS_IN_FOR_EXACT_BPT_OUT}
-    enum ExitKind {EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, EXACT_BPT_IN_FOR_TOKENS_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT}
-    enum SwapKind {GIVEN_IN, GIVEN_OUT}
-
-    /**
-     * @dev Data for each individual swap executed by `batchSwap`. The asset in and out fields are indexes into the
-     * `assets` array passed to that function, and ETH assets are converted to WETH.
-     *
-     * If `amount` is zero, the multihop mechanism is used to determine the actual amount based on the amount in/out
-     * from the previous swap, depending on the swap kind.
-     *
-     * The `userData` field is ignored by the Vault, but forwarded to the Pool in the `onSwap` hook, and may be
-     * used to extend swap behavior.
-     */
-    struct BatchSwapStep {
-        bytes32 poolId;
-        uint256 assetInIndex;
-        uint256 assetOutIndex;
-        uint256 amount;
-        bytes userData;
-    }
-    /**
-     * @dev All tokens in a swap are either sent from the `sender` account to the Vault, or from the Vault to the
-     * `recipient` account.
-     *
-     * If the caller is not `sender`, it must be an authorized relayer for them.
-     *
-     * If `fromInternalBalance` is true, the `sender`'s Internal Balance will be preferred, performing an ERC20
-     * transfer for the difference between the requested amount and the User's Internal Balance (if any). The `sender`
-     * must have allowed the Vault to use their tokens via `IERC20.approve()`. This matches the behavior of
-     * `joinPool`.
-     *
-     * If `toInternalBalance` is true, tokens will be deposited to `recipient`'s internal balance instead of
-     * transferred. This matches the behavior of `exitPool`.
-     *
-     * Note that ETH cannot be deposited to or withdrawn from Internal Balance: attempting to do so will trigger a
-     * revert.
-     */
-    struct FundManagement {
-        address sender;
-        bool fromInternalBalance;
-        address payable recipient;
-        bool toInternalBalance;
-    }
-
-    /**
-     * @dev Data for a single swap executed by `swap`. `amount` is either `amountIn` or `amountOut` depending on
-     * the `kind` value.
-     *
-     * `assetIn` and `assetOut` are either token addresses, or the IAsset sentinel value for ETH (the zero address).
-     * Note that Pools never interact with ETH directly: it will be wrapped to or unwrapped from WETH by the Vault.
-     *
-     * The `userData` field is ignored by the Vault, but forwarded to the Pool in the `onSwap` hook, and may be
-     * used to extend swap behavior.
-     */
-    struct SingleSwap {
-        bytes32 poolId;
-        SwapKind kind;
-        IAsset assetIn;
-        IAsset assetOut;
-        uint256 amount;
-        bytes userData;
-    }
-
-    // enconding formats https://github.com/balancer-labs/balancer-v2-monorepo/blob/master/pkg/balancer-js/src/pool-weighted/encoder.ts
-    struct JoinPoolRequest {
-        IAsset[] assets;
-        uint256[] maxAmountsIn;
-        bytes userData;
-        bool fromInternalBalance;
-    }
-
-    struct ExitPoolRequest {
-        IAsset[] assets;
-        uint256[] minAmountsOut;
-        bytes userData;
-        bool toInternalBalance;
-    }
-
-    function joinPool(
-        bytes32 poolId,
-        address sender,
-        address recipient,
-        JoinPoolRequest memory request
-    ) external payable;
-
-    function exitPool(
-        bytes32 poolId,
-        address sender,
-        address payable recipient,
-        ExitPoolRequest calldata request
-    ) external;
-
-    function getPool(bytes32 poolId) external view returns (address poolAddress, PoolSpecialization);
-
-    function getPoolTokenInfo(bytes32 poolId, IERC20 token) external view returns (
-        uint256 cash,
-        uint256 managed,
-        uint256 lastChangeBlock,
-        address assetManager
-    );
-
-    function getPoolTokens(bytes32 poolId) external view returns (
-        IERC20[] calldata tokens,
-        uint256[] calldata balances,
-        uint256 lastChangeBlock
-    );
-    /**
-     * @dev Performs a swap with a single Pool.
-     *
-     * If the swap is 'given in' (the number of tokens to send to the Pool is known), it returns the amount of tokens
-     * taken from the Pool, which must be greater than or equal to `limit`.
-     *
-     * If the swap is 'given out' (the number of tokens to take from the Pool is known), it returns the amount of tokens
-     * sent to the Pool, which must be less than or equal to `limit`.
-     *
-     * Internal Balance usage and the recipient are determined by the `funds` struct.
-     *
-     * Emits a `Swap` event.
-     */
-    function swap(
-        SingleSwap memory singleSwap,
-        FundManagement memory funds,
-        uint256 limit,
-        uint256 deadline
-    ) external returns (uint256 amountCalculated);
-
-    /**
-     * @dev Performs a series of swaps with one or multiple Pools. In each individual swap, the caller determines either
-     * the amount of tokens sent to or received from the Pool, depending on the `kind` value.
-     *
-     * Returns an array with the net Vault asset balance deltas. Positive amounts represent tokens (or ETH) sent to the
-     * Vault, and negative amounts represent tokens (or ETH) sent by the Vault. Each delta corresponds to the asset at
-     * the same index in the `assets` array.
-     *
-     * Swaps are executed sequentially, in the order specified by the `swaps` array. Each array element describes a
-     * Pool, the token to be sent to this Pool, the token to receive from it, and an amount that is either `amountIn` or
-     * `amountOut` depending on the swap kind.
-     *
-     * Multihop swaps can be executed by passing an `amount` value of zero for a swap. This will cause the amount in/out
-     * of the previous swap to be used as the amount in for the current one. In a 'given in' swap, 'tokenIn' must equal
-     * the previous swap's `tokenOut`. For a 'given out' swap, `tokenOut` must equal the previous swap's `tokenIn`.
-     *
-     * The `assets` array contains the addresses of all assets involved in the swaps. These are either token addresses,
-     * or the IAsset sentinel value for ETH (the zero address). Each entry in the `swaps` array specifies tokens in and
-     * out by referencing an index in `assets`. Note that Pools never interact with ETH directly: it will be wrapped to
-     * or unwrapped from WETH by the Vault.
-     *
-     * Internal Balance usage, sender, and recipient are determined by the `funds` struct. The `limits` array specifies
-     * the minimum or maximum amount of each token the vault is allowed to transfer.
-     *
-     * `batchSwap` can be used to make a single swap, like `swap` does, but doing so requires more gas than the
-     * equivalent `swap` call.
-     *
-     * Emits `Swap` events.
-     */
-    function batchSwap(
-        SwapKind kind,
-        BatchSwapStep[] memory swaps,
-        IAsset[] memory assets,
-        FundManagement memory funds,
-        int256[] memory limits,
-        uint256 deadline
-    ) external payable returns (int256[] memory);
-
-    function queryBatchSwap(
-        SwapKind kind, 
-        BatchSwapStep[] memory swaps, 
-        IAsset[] memory assets, 
-        FundManagement memory funds
-    ) external view returns (int256[] memory assetDeltas);
-}
 // File: SafeERC20.sol
 
 /**
@@ -1104,6 +1001,10 @@ interface HealthCheck {
     ) external view returns (bool);
 }
 
+interface IBaseFee {
+    function isCurrentBaseFeeAcceptable() external view returns (bool);
+}
+
 /**
  * @title Yearn Base Strategy
  * @author yearn.finance
@@ -1122,7 +1023,6 @@ interface HealthCheck {
  */
 
 abstract contract BaseStrategy {
-    using SafeMath for uint256;
     using SafeERC20 for IERC20;
     string public metadataURI;
 
@@ -1138,7 +1038,7 @@ abstract contract BaseStrategy {
      * @return A string which holds the current API version of this contract.
      */
     function apiVersion() public pure returns (string memory) {
-        return "0.4.3";
+        return "0.4.5";
     }
 
     /**
@@ -1190,13 +1090,18 @@ abstract contract BaseStrategy {
 
     event UpdatedMaxReportDelay(uint256 delay);
 
-    event UpdatedProfitFactor(uint256 profitFactor);
+    event UpdatedBaseFeeOracle(address baseFeeOracle);
 
-    event UpdatedDebtThreshold(uint256 debtThreshold);
+    event UpdatedCreditThreshold(uint256 creditThreshold);
+
+    event ForcedHarvestTrigger(bool triggerState);
 
     event EmergencyExitEnabled();
 
     event UpdatedMetadataURI(string metadataURI);
+
+    event SetHealthCheck(address);
+    event SetDoHealthCheck(bool);
 
     // The minimum number of seconds between harvest calls. See
     // `setMinReportDelay()` for more details.
@@ -1206,59 +1111,89 @@ abstract contract BaseStrategy {
     // `setMaxReportDelay()` for more details.
     uint256 public maxReportDelay;
 
-    // The minimum multiple that `callCost` must be above the credit/profit to
-    // be "justifiable". See `setProfitFactor()` for more details.
-    uint256 public profitFactor;
-
-    // Use this to adjust the threshold at which running a debt causes a
-    // harvest trigger. See `setDebtThreshold()` for more details.
-    uint256 public debtThreshold;
-
     // See note on `setEmergencyExit()`.
     bool public emergencyExit;
 
+    // See note on `isBaseFeeOracleAcceptable()`.
+    address public baseFeeOracle;
+
+    // See note on `setCreditThreshold()`
+    uint256 public creditThreshold;
+
+    // See note on `setForceHarvestTriggerOnce`
+    bool public forceHarvestTriggerOnce;
+
     // modifiers
     modifier onlyAuthorized() {
-        require(msg.sender == strategist || msg.sender == governance(), "!authorized");
+        _onlyAuthorized();
         _;
     }
 
     modifier onlyEmergencyAuthorized() {
-        require(
-            msg.sender == strategist || msg.sender == governance() || msg.sender == vault.guardian() || msg.sender == vault.management(),
-            "!authorized"
-        );
+        _onlyEmergencyAuthorized();
         _;
     }
 
     modifier onlyStrategist() {
-        require(msg.sender == strategist, "!strategist");
+        _onlyStrategist();
         _;
     }
 
     modifier onlyGovernance() {
-        require(msg.sender == governance(), "!authorized");
+        _onlyGovernance();
+        _;
+    }
+
+    modifier onlyRewarder() {
+        _onlyRewarder();
         _;
     }
 
     modifier onlyKeepers() {
+        _onlyKeepers();
+        _;
+    }
+
+    modifier onlyVaultManagers() {
+        _onlyVaultManagers();
+        _;
+    }
+
+    function _onlyAuthorized() internal {
+        require(msg.sender == strategist || msg.sender == governance());
+    }
+
+    function _onlyEmergencyAuthorized() internal {
+        require(msg.sender == strategist || msg.sender == governance() || msg.sender == vault.guardian() || msg.sender == vault.management());
+    }
+
+    function _onlyStrategist() internal {
+        require(msg.sender == strategist);
+    }
+
+    function _onlyGovernance() internal {
+        require(msg.sender == governance());
+    }
+
+    function _onlyRewarder() internal {
+        require(msg.sender == governance() || msg.sender == strategist);
+    }
+
+    function _onlyKeepers() internal {
         require(
             msg.sender == keeper ||
                 msg.sender == strategist ||
                 msg.sender == governance() ||
                 msg.sender == vault.guardian() ||
-                msg.sender == vault.management(),
-            "!authorized"
+                msg.sender == vault.management()
         );
-        _;
     }
 
-    modifier onlyVaultManagers() {
-        require(msg.sender == vault.management() || msg.sender == governance(), "!authorized");
-        _;
+    function _onlyVaultManagers() internal {
+        require(msg.sender == vault.management() || msg.sender == governance());
     }
 
-    constructor(address _vault) public {
+    constructor(address _vault) {
         _initialize(_vault, msg.sender, msg.sender, msg.sender);
     }
 
@@ -1284,25 +1219,25 @@ abstract contract BaseStrategy {
 
         vault = VaultAPI(_vault);
         want = IERC20(vault.token());
-        want.safeApprove(_vault, uint256(-1)); // Give Vault unlimited access (might save gas)
+        want.safeApprove(_vault, type(uint256).max); // Give Vault unlimited access (might save gas)
         strategist = _strategist;
         rewards = _rewards;
         keeper = _keeper;
 
         // initialize variables
-        minReportDelay = 0;
-        maxReportDelay = 86400;
-        profitFactor = 100;
-        debtThreshold = 0;
+        maxReportDelay = 30 days;
+        creditThreshold = 1_000_000 * 10**vault.decimals(); // set this high by default so we don't get tons of false triggers if not changed
 
-        vault.approve(rewards, uint256(-1)); // Allow rewards to be pulled
+        vault.approve(rewards, type(uint256).max); // Allow rewards to be pulled
     }
 
     function setHealthCheck(address _healthCheck) external onlyVaultManagers {
+        emit SetHealthCheck(_healthCheck);
         healthCheck = _healthCheck;
     }
 
     function setDoHealthCheck(bool _doHealthCheck) external onlyVaultManagers {
+        emit SetDoHealthCheck(_doHealthCheck);
         doHealthCheck = _doHealthCheck;
     }
 
@@ -1346,11 +1281,11 @@ abstract contract BaseStrategy {
      *  This may only be called by the strategist.
      * @param _rewards The address to use for pulling rewards.
      */
-    function setRewards(address _rewards) external onlyStrategist {
+    function setRewards(address _rewards) external onlyRewarder {
         require(_rewards != address(0));
         vault.approve(rewards, 0);
         rewards = _rewards;
-        vault.approve(rewards, uint256(-1));
+        vault.approve(rewards, type(uint256).max);
         emit UpdatedRewards(_rewards);
     }
 
@@ -1390,35 +1325,44 @@ abstract contract BaseStrategy {
 
     /**
      * @notice
-     *  Used to change `profitFactor`. `profitFactor` is used to determine
-     *  if it's worthwhile to harvest, given gas costs. (See `harvestTrigger()`
-     *  for more details.)
+     *  Used to ensure that any significant credit a strategy has from the
+     *  vault will be automatically harvested.
      *
-     *  This may only be called by governance or the strategist.
-     * @param _profitFactor A ratio to multiply anticipated
-     * `harvest()` gas cost against.
+     *  This may only be called by governance or management.
+     * @param _creditThreshold The number of want tokens that will
+     *  automatically trigger a harvest.
      */
-    function setProfitFactor(uint256 _profitFactor) external onlyAuthorized {
-        profitFactor = _profitFactor;
-        emit UpdatedProfitFactor(_profitFactor);
+    function setCreditThreshold(uint256 _creditThreshold) external onlyVaultManagers {
+        creditThreshold = _creditThreshold;
+        emit UpdatedCreditThreshold(_creditThreshold);
     }
 
     /**
      * @notice
-     *  Sets how far the Strategy can go into loss without a harvest and report
-     *  being required.
+     *  Used to automatically trigger a harvest by our keepers. Can be
+     *  useful if gas prices are too high now, and we want to harvest
+     *  later once prices have lowered.
      *
-     *  By default this is 0, meaning any losses would cause a harvest which
-     *  will subsequently report the loss to the Vault for tracking. (See
-     *  `harvestTrigger()` for more details.)
-     *
-     *  This may only be called by governance or the strategist.
-     * @param _debtThreshold How big of a loss this Strategy may carry without
-     * being required to report to the Vault.
+     *  This may only be called by governance or management.
+     * @param _forceHarvestTriggerOnce Value of true tells keepers to harvest
+     *  our strategy
      */
-    function setDebtThreshold(uint256 _debtThreshold) external onlyAuthorized {
-        debtThreshold = _debtThreshold;
-        emit UpdatedDebtThreshold(_debtThreshold);
+    function setForceHarvestTriggerOnce(bool _forceHarvestTriggerOnce) external onlyVaultManagers {
+        forceHarvestTriggerOnce = _forceHarvestTriggerOnce;
+        emit ForcedHarvestTrigger(_forceHarvestTriggerOnce);
+    }
+
+    /**
+     * @notice
+     *  Used to set our baseFeeOracle, which checks the network's current base
+     *  fee price to determine whether it is an optimal time to harvest or tend.
+     *
+     *  This may only be called by governance or management.
+     * @param _baseFeeOracle Address of our baseFeeOracle
+     */
+    function setBaseFeeOracle(address _baseFeeOracle) external onlyVaultManagers {
+        baseFeeOracle = _baseFeeOracle;
+        emit UpdatedBaseFeeOracle(_baseFeeOracle);
     }
 
     /**
@@ -1584,6 +1528,7 @@ abstract contract BaseStrategy {
         // signal for that.
         // If your implementation uses the cost of the call in want, you can
         // use uint256 callCost = ethToWant(callCostInWei);
+        // It is highly suggested to use the baseFeeOracle here as well.
 
         return false;
     }
@@ -1618,11 +1563,17 @@ abstract contract BaseStrategy {
      *  This call and `tendTrigger` should never return `true` at the
      *  same time.
      *
-     *  See `min/maxReportDelay`, `profitFactor`, `debtThreshold` to adjust the
+     *  See `maxReportDelay`, `creditThreshold` to adjust the
      *  strategist-controlled parameters that will influence whether this call
      *  returns `true` or not. These parameters will be used in conjunction
      *  with the parameters reported to the Vault (see `params`) to determine
      *  if calling `harvest()` is merited.
+     *
+     *  This trigger also checks the network's base fee to avoid harvesting during
+     *  times of high network congestion.
+     *
+     *  Consider use of super.harvestTrigger() in any override to build on top
+     *  of this logic instead of replacing it. For example, if using `minReportDelay`.
      *
      *  It is expected that an external system will check `harvestTrigger()`.
      *  This could be a script run off a desktop or cloud bot (e.g.
@@ -1633,38 +1584,32 @@ abstract contract BaseStrategy {
      * @return `true` if `harvest()` should be called, `false` otherwise.
      */
     function harvestTrigger(uint256 callCostInWei) public view virtual returns (bool) {
-        uint256 callCost = ethToWant(callCostInWei);
-        StrategyParams memory params = vault.strategies(address(this));
+        // Should not trigger if strategy is not active (no assets or no debtRatio)
+        if (!isActive()) return false;
 
-        // Should not trigger if Strategy is not activated
-        if (params.activation == 0) return false;
+        // check if the base fee gas price is higher than we allow. if it is, block harvests.
+        if (!isBaseFeeAcceptable()) return false;
 
-        // Should not trigger if we haven't waited long enough since previous harvest
-        if (block.timestamp.sub(params.lastReport) < minReportDelay) return false;
+        // trigger if we want to manually harvest, but only if our gas price is acceptable
+        if (forceHarvestTriggerOnce) return true;
 
         // Should trigger if hasn't been called in a while
-        if (block.timestamp.sub(params.lastReport) >= maxReportDelay) return true;
+        StrategyParams memory params = vault.strategies(address(this));
+        if ((block.timestamp - params.lastReport) >= maxReportDelay) return true;
 
-        // If some amount is owed, pay it back
-        // NOTE: Since debt is based on deposits, it makes sense to guard against large
-        //       changes to the value from triggering a harvest directly through user
-        //       behavior. This should ensure reasonable resistance to manipulation
-        //       from user-initiated withdrawals as the outstanding debt fluctuates.
-        uint256 outstanding = vault.debtOutstanding();
-        if (outstanding > debtThreshold) return true;
+        // harvest our credit if it's above our threshold or return false
+        return (vault.creditAvailable() > creditThreshold);
+    }
 
-        // Check for profits and losses
-        uint256 total = estimatedTotalAssets();
-        // Trigger if we have a loss to report
-        if (total.add(debtThreshold) < params.totalDebt) return true;
-
-        uint256 profit = 0;
-        if (total > params.totalDebt) profit = total.sub(params.totalDebt); // We've earned a profit!
-
-        // Otherwise, only trigger if it "makes sense" economically (gas cost
-        // is <N% of value moved)
-        uint256 credit = vault.creditAvailable();
-        return (profitFactor.mul(callCost) < credit.add(profit));
+    /**
+     * @notice
+     *  Check if the current network base fee is below our external target. If
+     *  not, then harvestTrigger will return false.
+     * @return `true` if `harvest()` should be allowed, `false` otherwise.
+     */
+    function isBaseFeeAcceptable() public view returns (bool) {
+        if (baseFeeOracle == address(0)) return true;
+        else return IBaseFee(baseFeeOracle).isCurrentBaseFeeAcceptable();
     }
 
     /**
@@ -1693,15 +1638,19 @@ abstract contract BaseStrategy {
             // Free up as much capital as possible
             uint256 amountFreed = liquidateAllPositions();
             if (amountFreed < debtOutstanding) {
-                loss = debtOutstanding.sub(amountFreed);
+                loss = debtOutstanding - amountFreed;
             } else if (amountFreed > debtOutstanding) {
-                profit = amountFreed.sub(debtOutstanding);
+                profit = amountFreed - debtOutstanding;
             }
-            debtPayment = debtOutstanding.sub(loss);
+            debtPayment = debtOutstanding - loss;
         } else {
             // Free up returns for Vault to pull
             (profit, loss, debtPayment) = prepareReturn(debtOutstanding);
         }
+
+        // we're done harvesting, so reset our trigger if we used it
+        forceHarvestTriggerOnce = false;
+        emit ForcedHarvestTrigger(false);
 
         // Allow Vault to take up to the "harvested" balance of this contract,
         // which is the amount it has earned since the last time it reported to
@@ -1716,6 +1665,7 @@ abstract contract BaseStrategy {
         if (doHealthCheck && healthCheck != address(0)) {
             require(HealthCheck(healthCheck).check(profit, loss, debtPayment, debtOutstanding, totalDebt), "!healthcheck");
         } else {
+            emit SetDoHealthCheck(true);
             doHealthCheck = true;
         }
 
@@ -1778,7 +1728,9 @@ abstract contract BaseStrategy {
      */
     function setEmergencyExit() external onlyEmergencyAuthorized {
         emergencyExit = true;
-        vault.revokeStrategy();
+        if (vault.strategies(address(this)).debtRatio != 0) {
+            vault.revokeStrategy();
+        }
 
         emit EmergencyExitEnabled();
     }
@@ -1835,7 +1787,7 @@ abstract contract BaseStrategyInitializable is BaseStrategy {
     bool public isOriginal = true;
     event Cloned(address indexed clone);
 
-    constructor(address _vault) public BaseStrategy(_vault) {}
+    constructor(address _vault) BaseStrategy(_vault) {}
 
     function initialize(
         address _vault,
@@ -1847,8 +1799,68 @@ abstract contract BaseStrategyInitializable is BaseStrategy {
     }
 
     function clone(address _vault) external returns (address) {
+        return clone(_vault, msg.sender, msg.sender, msg.sender);
+    }
+
+    function clone(
+        address _vault,
+        address _strategist,
+        address _rewards,
+        address _keeper
+    ) public returns (address newStrategy) {
         require(isOriginal, "!clone");
-        return this.clone(_vault, msg.sender, msg.sender, msg.sender);
+        // Copied from https://github.com/optionality/clone-factory/blob/master/contracts/CloneFactory.sol
+        bytes20 addressBytes = bytes20(address(this));
+
+        assembly {
+            // EIP-1167 bytecode
+            let clone_code := mload(0x40)
+            mstore(clone_code, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
+            mstore(add(clone_code, 0x14), addressBytes)
+            mstore(add(clone_code, 0x28), 0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000)
+            newStrategy := create(0, clone_code, 0x37)
+        }
+
+        BaseStrategyInitializable(newStrategy).initialize(_vault, _strategist, _rewards, _keeper);
+
+        emit Cloned(newStrategy);
+    }
+}
+
+// File: OptStrategy.sol
+
+/********************
+ *
+ *   A lender optimisation strategy for any erc20 asset
+ *   https://github.com/Grandthrax/yearnV2-generic-lender-strat
+ *   v0.3.1
+ *
+ *   This strategy works by taking plugins designed for standard lending platforms
+ *   It automatically chooses the best yield generating platform and adjusts accordingly
+ *   The adjustment is sub optimal so there is an additional option to manually set position
+ *
+ ********************* */
+
+contract OptStrategy is BaseStrategy {
+    using SafeERC20 for IERC20;
+    using Address for address;
+    using SafeMath for uint256;
+
+    uint256 public withdrawalThreshold = 1e12;
+    uint256 public constant SECONDSPERYEAR = 31556952;
+
+    IGenericLender[] public lenders;
+    bool public externalOracle; // default is false
+    address public wantToEthOracle;
+
+    event Cloned(address indexed clone);
+
+    constructor(address _vault) public BaseStrategy(_vault) {
+        debtThreshold = 100 * 1e18;
+    }
+
+    function clone(address _vault) external returns (address newStrategy) {
+        newStrategy = this.clone(_vault, msg.sender, msg.sender, msg.sender);
     }
 
     function clone(
@@ -1869,690 +1881,496 @@ abstract contract BaseStrategyInitializable is BaseStrategy {
             newStrategy := create(0, clone_code, 0x37)
         }
 
-        BaseStrategyInitializable(newStrategy).initialize(_vault, _strategist, _rewards, _keeper);
+        OptStrategy(newStrategy).initialize(_vault, _strategist, _rewards, _keeper);
 
         emit Cloned(newStrategy);
     }
-}
 
-// File: CErc20I.sol
-
-interface CErc20I is CTokenI {
-    function mint(uint256 mintAmount) external returns (uint256);
-
-    function redeem(uint256 redeemTokens) external returns (uint256);
-
-    function redeemUnderlying(uint256 redeemAmount) external returns (uint256);
-
-    function borrow(uint256 borrowAmount) external returns (uint256);
-
-    function repayBorrow(uint256 repayAmount) external returns (uint256);
-
-    function repayBorrowBehalf(address borrower, uint256 repayAmount) external returns (uint256);
-
-    function liquidateBorrow(
-        address borrower,
-        uint256 repayAmount,
-        CTokenI cTokenCollateral
-    ) external returns (uint256);
-
-    function underlying() external view returns (address);
-}
-
-// File: GenericLenderBase.sol
-
-interface IBaseStrategy {
-    function apiVersion() external pure returns (string memory);
-
-    function name() external pure returns (string memory);
-
-    function vault() external view returns (address);
-
-    function keeper() external view returns (address);
-
-    function tendTrigger(uint256 callCost) external view returns (bool);
-
-    function tend() external;
-
-    function harvestTrigger(uint256 callCost) external view returns (bool);
-
-    function harvest() external;
-
-    function strategist() external view returns(address);
-
-    function management() external view returns (address);
-}
-
-abstract contract GenericLenderBase is IGenericLender {
-    using SafeERC20 for IERC20;
-    VaultAPI public vault;
-    address public override strategy;
-    IERC20 public want;
-    string public override lenderName;
-    uint256 public dust;
-
-    event Cloned(address indexed clone);
-
-    constructor(address _strategy, string memory _name) public {
-        _initialize(_strategy, _name);
+    function initialize(
+        address _vault,
+        address _strategist,
+        address _rewards,
+        address _keeper
+    ) external virtual {
+        _initialize(_vault, _strategist, _rewards, _keeper);
     }
 
-    function _initialize(address _strategy, string memory _name) internal {
-        require(address(strategy) == address(0), "Lender already initialized");
-
-        strategy = _strategy;
-        vault = VaultAPI(IBaseStrategy(strategy).vault());
-        want = IERC20(vault.token());
-        lenderName = _name;
-        dust = 10000;
-
-        want.safeApprove(_strategy, uint256(-1));
+    function setWithdrawalThreshold(uint256 _threshold) external onlyAuthorized {
+        withdrawalThreshold = _threshold;
     }
 
-    function initialize(address _strategy, string memory _name) external virtual {
-        _initialize(_strategy, _name);
+    function setPriceOracle(address _oracle) external onlyAuthorized {
+        wantToEthOracle = _oracle;
     }
 
-    function _clone(address _strategy, string memory _name) internal returns (address newLender) {
-        // Copied from https://github.com/optionality/clone-factory/blob/master/contracts/CloneFactory.sol
-        bytes20 addressBytes = bytes20(address(this));
+    function name() external view override returns (string memory) {
+        return "StrategyLenderYieldOptimiser";
+    }
 
-        assembly {
-            // EIP-1167 bytecode
-            let clone_code := mload(0x40)
-            mstore(clone_code, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
-            mstore(add(clone_code, 0x14), addressBytes)
-            mstore(add(clone_code, 0x28), 0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000)
-            newLender := create(0, clone_code, 0x37)
+    //management functions
+    //add lenders for the strategy to choose between
+    // only governance to stop strategist adding dodgy lender
+    function addLender(address a) public onlyGovernance {
+        IGenericLender n = IGenericLender(a);
+        require(n.strategy() == address(this), "Undocked Lender");
+
+        for (uint256 i = 0; i < lenders.length; i++) {
+            require(a != address(lenders[i]), "Already Added");
+        }
+        lenders.push(n);
+    }
+
+    //but strategist can remove for safety
+    function safeRemoveLender(address a) public onlyAuthorized {
+        _removeLender(a, false);
+    }
+
+    function forceRemoveLender(address a) public onlyAuthorized {
+        _removeLender(a, true);
+    }
+
+    //force removes the lender even if it still has a balance
+    function _removeLender(address a, bool force) internal {
+        for (uint256 i = 0; i < lenders.length; i++) {
+            if (a == address(lenders[i])) {
+                bool allWithdrawn = lenders[i].withdrawAll();
+
+                if (!force) {
+                    require(allWithdrawn, "WITHDRAW FAILED");
+                }
+
+                //put the last index here
+                //remove last index
+                if (i != lenders.length - 1) {
+                    lenders[i] = lenders[lenders.length - 1];
+                }
+
+                //pop shortens array by 1 thereby deleting the last index
+                lenders.pop();
+
+                //if balance to spend we might as well put it into the best lender
+                if (want.balanceOf(address(this)) > 0) {
+                    adjustPosition(0);
+                }
+                return;
+            }
+        }
+        require(false, "NOT LENDER");
+    }
+
+    //we could make this more gas efficient but it is only used by a view function
+    struct lendStatus {
+        string name;
+        uint256 assets;
+        uint256 rate;
+        address add;
+    }
+
+    //Returns the status of all lenders attached the strategy
+    function lendStatuses() public view returns (lendStatus[] memory) {
+        lendStatus[] memory statuses = new lendStatus[](lenders.length);
+        for (uint256 i = 0; i < lenders.length; i++) {
+            lendStatus memory s;
+            s.name = lenders[i].lenderName();
+            s.add = address(lenders[i]);
+            s.assets = lenders[i].nav();
+            s.rate = lenders[i].apr();
+            statuses[i] = s;
         }
 
-        GenericLenderBase(newLender).initialize(_strategy, _name);
-        emit Cloned(newLender);
+        return statuses;
     }
 
-    function setDust(uint256 _dust) external virtual override management {
-        dust = _dust;
+    // lent assets plus loose assets
+    function estimatedTotalAssets() public view override returns (uint256) {
+        uint256 nav = lentTotalAssets();
+        nav = nav.add(want.balanceOf(address(this)));
+
+        return nav;
     }
 
-    function sweep(address _token) external virtual override management {
-        address[] memory _protectedTokens = protectedTokens();
-        for (uint256 i; i < _protectedTokens.length; i++) require(_token != _protectedTokens[i], "!protected");
-
-        IERC20(_token).safeTransfer(vault.governance(), IERC20(_token).balanceOf(address(this)));
+    function numLenders() public view returns (uint256) {
+        return lenders.length;
     }
 
-    function protectedTokens() internal view virtual returns (address[] memory);
-
-    modifier management() {
-        require(
-            msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
-            "!management"
-        );
-        _;
-    }
-
-    modifier onlyGovernance() {
-        require(msg.sender == vault.governance(), "!gov");
-        _;
-    }
-}
-
-// File: GenericIronBank.sol
-
-/********************
- *   A lender plugin for LenderYieldOptimiser for any erc20 asset on IronBank (not eth)
- *   Made by @Schlagonia
- *   https://github.com/Schlagonia/Yearn-V2-Generic-Lender/blob/main/contracts/GenericLender/GenericIronBank.sol
- *
- ********************* */
-
-interface IVeledrome {
-    struct route {
-        address from;
-        address to;
-        bool stable;
-    }
-    
-    function swapExactTokensForTokens(
-        uint amountIn,
-        uint amountOutMin,
-        route[] calldata routes,
-        address to,
-        uint deadline
-    ) external returns (uint256[] memory amounts);
-
-    function getAmountsOut(uint amountIn, route[] memory routes) external view returns (uint256[] memory amounts);
-} 
-
-contract GenericIronBank is GenericLenderBase {
-    using SafeERC20 for IERC20;
-    using Address for address;
-    using SafeMath for uint256;
-
-    //Seconds per year for calculations
-    uint256 private constant blocksPerYear = 3154 * 10**4;
-    //Reward token
-    address public constant ib = 
-        0x00a35FD824c717879BF370E70AC6868b95870Dfb;
-    
-    //Contracts for staking i tokens
-    IStakingRewards public stakingRewards;
-    IStakingRewardsFactory public constant rewardsFactory =
-        IStakingRewardsFactory(0x35F70CE60f049A8c21721C53a1dFCcB5bF4a1Ea8);
-
-    /*** 
-        Rewards token stuff
-    ***/
-    //Wrapped native token for chain i.e. WETH
-    address internal constant WNATIVE =
-        0x4200000000000000000000000000000000000006;
-    //USDC for the middle of swaps
-    address internal constant usdc = 
-        0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
-    //Asset to use for swap as the middle
-    address public middleSwapToken;
-    //stable bool should be true if we are using usdc as the middle token and want is a stable coin
-    bool public stable;
-    ///For Optimism we will only be using the Veledrome router \\\\
-    IVeledrome public constant router =
-        IVeledrome(0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9);
-    //Balancer Variables for swapping
-    IBalancerVault public constant balancerVault =
-        IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
-    bytes32 public constant ibEthPoolId = 
-        bytes32(0xefb0d9f51efd52d7589a9083a6d0ca4de416c24900020000000000000000002c);
-    //Can be set for a weth - want lp balncer pool to make harvests work
-    bytes32 public ethWantPoolId;
-
-    address public keep3r;
-    address public tradeFactory;
-    bool public ignorePrinting;
-
-    uint256 public dustThreshold;
-    uint256 public minIbToSell;
-    uint256 public minRewardToHarvest;
-
-    CErc20I public cToken;
-
-    constructor(
-        address _strategy,
-        string memory name
-    ) public GenericLenderBase(_strategy, name) {
-        _initialize();
-    }
-
-    function initialize() external {
-        _initialize();
-    }
-
-    function _initialize() internal {
-        require(address(cToken) == address(0), "GenericIB already initialized");
-        cToken = CErc20I(rewardsFactory.getStakingToken(address(want)));
-        require(cToken.underlying() == address(want), "WRONG CTOKEN");
-
-        address _stakingRewards = rewardsFactory.getStakingRewards(address(cToken));
-        if(_stakingRewards != address(0)) {
-            cToken.approve(_stakingRewards, type(uint256).max);
-            stakingRewards = IStakingRewards(_stakingRewards);
-        }
-
-        want.safeApprove(address(cToken), type(uint256).max);
-
-        //default to usdc
-        middleSwapToken = usdc;
-        //default to ignore printing due to lack of IB liquidity
-        ignorePrinting = true;
-        dustThreshold = 1_000; //depends on want
-    }
-
-    function cloneIronBankLender(
-        address _strategy,
-        string memory _name
-    ) external returns (address newLender) {
-        newLender = _clone(_strategy, _name);
-        GenericIronBank(newLender).initialize();
-    }
-
-    function nav() external view override returns (uint256) {
-        return _nav();
-    }
-
-    //adjust dust threshol
-    function setDustThreshold(uint256 amount) external management {
-        dustThreshold = amount;
-    }
-
-    //Can update the staking rewards contract, May start as 0 if not rewarded then changes later
-    function setStakingRewards() external management {
-        address _stakingRewards = rewardsFactory.getStakingRewards(address(cToken));
-        if(_stakingRewards != address(0)){
-            cToken.approve(address(stakingRewards), 0);
-            cToken.approve(_stakingRewards, type(uint256).max);
-            //make sure ignorePrinting == true
-            ignorePrinting = true;
-        }
-        stakingRewards = IStakingRewards(_stakingRewards);
-    }
-
-    function setRewardStuff(bytes32 _ethWantPoolId, uint256 _minIbToSell, uint256 _minRewardToHavest) external management {
-        ethWantPoolId = _ethWantPoolId;
-        minIbToSell = _minIbToSell;
-        minRewardToHarvest = _minRewardToHavest;
-    }
-
-    //adjust dust threshol
-    function setIgnorePrinting(bool _ignorePrinting) external management {
-        ignorePrinting = _ignorePrinting;
-    }
-
-    function setKeep3r(address _keep3r) external management {
-        keep3r = _keep3r;
-    }
-
-    function balanceOfWant() public view returns(uint256) {
-        return want.balanceOf(address(this));
-    }
-
-    function balanceOfCToken() public view returns(uint256) {
-        return cToken.balanceOf(address(this));
-    }
-
-    function _nav() internal view returns (uint256) {
-        uint256 amount = balanceOfWant().add(underlyingBalanceStored());
-
-        if(amount < dustThreshold){
-            return 0;
-        }else{
-            return amount;
-        }
-    }
-
-    function underlyingBalanceStored() public view returns (uint256 balance) {
-        uint256 currentCr = balanceOfCToken().add(stakedBalance());
-        if (currentCr < dustThreshold) {
-            balance = 0;
-        } else {
-            //The current exchange rate as an unsigned integer, scaled by 1e18.
-            balance = currentCr.mul(cToken.exchangeRateStored()).div(1e18);
-        }
-    }
-
-    function stakedBalance() public view returns(uint256) {
-        if(address(stakingRewards) == address(0)) return 0;
-
-        return stakingRewards.balanceOf(address(this));
-    }
-
-    function apr() external view override returns (uint256) {
-        return _apr();
-    }
-
-    function _apr() internal view returns (uint256) {
-        return (cToken.supplyRatePerBlock().add(compBlockShareInWant(0))).mul(blocksPerYear);
-    }
-
-    function compBlockShareInWant(uint256 change) public view returns (uint256){
-
-        if(ignorePrinting){
+    //the weighted apr of all lenders. sum(nav * apr)/totalNav
+    function estimatedAPR() public view returns (uint256) {
+        uint256 bal = estimatedTotalAssets();
+        if (bal == 0) {
             return 0;
         }
 
-        if(stakingRewards.periodFinish() < block.timestamp){
-            return 0;
-        }
-        uint256 distributionPerSec = stakingRewards.getRewardRate(ib);
-        //convert to per dolla
-        uint256 totalStaked = stakingRewards.totalSupply().mul(cToken.exchangeRateStored()).div(1e18);
-        
-        totalStaked = totalStaked.add(change);
+        uint256 weightedAPR = 0;
 
-        uint256 blockShareSupply;
-        if(totalStaked > 0){
-            blockShareSupply = distributionPerSec.mul(1e18).div(totalStaked);
+        for (uint256 i = 0; i < lenders.length; i++) {
+            weightedAPR = weightedAPR.add(lenders[i].weightedApr());
         }
 
-        uint256 estimatedWant = _priceCheck(ib, address(want), blockShareSupply);
-        uint256 compRate;
-        if(estimatedWant != 0){
-            compRate = estimatedWant.mul(9).div(10); //10% pessimist
-        }
-
-        return(compRate);
+        return weightedAPR.div(bal);
     }
 
-    //WARNING. manipulatable and simple routing. Only use for safe functions
-    function _priceCheck(address start, address end, uint256 _amount) internal view returns (uint256) {
-        if (_amount == 0) {
-            return 0;
-        }
-        uint256[] memory amounts = router.getAmountsOut(_amount, _getTokenOutPath(start, end));
+    //Estimates the impact on APR if we add more money. It does not take into account adjusting position
+    function _estimateDebtLimitIncrease(uint256 change) internal view returns (uint256) {
+        uint256 highestAPR = 0;
+        uint256 aprChoice = 0;
+        uint256 assets = 0;
 
-        return amounts[amounts.length - 1];
-    }
-
-    function weightedApr() external view override returns (uint256) {
-        uint256 a = _apr();
-        return a.mul(_nav());
-    }
-
-    function withdraw(uint256 amount) external override management returns (uint256) {
-        return _withdraw(amount);
-    }
-
-    //emergency withdraw. sends balance plus amount to governance
-    function emergencyWithdraw(uint256 amount) external override management {
-        //dont care about errors here. we want to exit what we can
-        _unStake(_convertFromUnderlying(amount));
-        cToken.redeemUnderlying(amount);
-
-        want.safeTransfer(vault.governance(), balanceOfWant());
-    }
-
-    //withdraw an amount including any want balance
-    function _withdraw(uint256 amount) internal returns (uint256) {
-        //Call to accrue rewards and update exchange rate first
-        cToken.accrueInterest();
-        //This should be accurate due to previous call
-        uint256 balanceUnderlying = underlyingBalanceStored();
-        uint256 looseBalance = balanceOfWant();
-        uint256 total = balanceUnderlying.add(looseBalance);
-
-        if (amount >= total) {
-            //cant withdraw more than we own. so withdraw all we can
-            if(balanceUnderlying > dustThreshold){
-                _unStake(stakedBalance());
-                require(cToken.redeem(balanceOfCToken()) == 0, "ctoken: redeemAll fail");
-            }
-            looseBalance = balanceOfWant();
-            if(looseBalance > 0 ){
-                want.safeTransfer(address(strategy), looseBalance);
-                return looseBalance;
-            }else{
-                return 0;
-            }
-
-        }
-
-        if (looseBalance >= amount) {
-            want.safeTransfer(address(strategy), amount);
-            return amount;
-        }
-
-        //not state changing but OK because of previous call
-        uint256 liquidity = want.balanceOf(address(cToken));
-
-        if (liquidity > 1) {
-            uint256 toWithdraw = amount.sub(looseBalance);
-
-            if (toWithdraw > liquidity) {
-                toWithdraw = liquidity;
-            }
-            if(toWithdraw > 0){
-                _unStake(_convertFromUnderlying(toWithdraw));
-                require(cToken.redeemUnderlying(toWithdraw) == 0, "ctoken: redeemUnderlying fail");
+        for (uint256 i = 0; i < lenders.length; i++) {
+            uint256 apr = lenders[i].aprAfterDeposit(change);
+            if (apr > highestAPR) {
+                aprChoice = i;
+                highestAPR = apr;
+                assets = lenders[i].nav();
             }
         }
 
-        looseBalance = balanceOfWant();
-        want.safeTransfer(address(strategy), looseBalance);
-        return looseBalance;
-    }
+        uint256 weightedAPR = highestAPR.mul(assets.add(change));
 
-    function manualClaimAndDontSell() external management{
-        stakingRewards.getReward();
-    }
-
-    function harvest() external keepers {
-        _disposeOfComp();
-
-        uint256 wantBalance = balanceOfWant();
-        if(wantBalance > 0) {
-            cToken.mint(wantBalance);
-        }
-        _stake();
-    }
-
-    function harvestTrigger(uint256 /*callCost*/) external view returns(bool) {
-        if(address(stakingRewards) == address(0)) return false;
-
-        if(getRewardsOwed().add(IERC20(ib).balanceOf(address(this))) > minRewardToHarvest) return true;
-    }
-
-    function getRewardsOwed() public view returns(uint256) {
-        return stakingRewards.earned(ib, address(this));
-    }
-
-    function _disposeOfComp() internal {
-        if(address(stakingRewards) != address(0) && stakedBalance() > 0){
-            stakingRewards.getReward();
+        for (uint256 i = 0; i < lenders.length; i++) {
+            if (i != aprChoice) {
+                weightedAPR = weightedAPR.add(lenders[i].weightedApr());
+            }
         }
 
-        uint256 _ib = IERC20(ib).balanceOf(address(this));
+        uint256 bal = estimatedTotalAssets().add(change);
 
-        if (_ib > minIbToSell && tradeFactory == address(0)) {
-            _swapFrom(ib, address(want), _ib);
+        return weightedAPR.div(bal);
+    }
+
+    //Estimates debt limit decrease. It is not accurate and should only be used for very broad decision making
+    function _estimateDebtLimitDecrease(uint256 change) internal view returns (uint256) {
+        uint256 lowestApr = uint256(-1);
+        uint256 aprChoice = 0;
+
+        for (uint256 i = 0; i < lenders.length; i++) {
+            uint256 apr = lenders[i].aprAfterDeposit(change);
+            if (apr < lowestApr) {
+                aprChoice = i;
+                lowestApr = apr;
+            }
         }
-    }
 
-    function _swapFrom(address _from, address _to, uint256 _amountIn) internal{
-        IBalancerVault.BatchSwapStep[] memory swaps;
-        IAsset[] memory assets;
-        int[] memory limits;
-        if(address(want) == WNATIVE) {
-            swaps = new IBalancerVault.BatchSwapStep[](1);
-            assets = new IAsset[](2);
-            limits = new int[](2);
-        } else{
-            swaps = new IBalancerVault.BatchSwapStep[](2);
-            assets = new IAsset[](3);
-            limits = new int[](3);
-            //Sell WETH -> want
-            swaps[1] = IBalancerVault.BatchSwapStep(
-                ethWantPoolId,
-                1,
-                2,
-                0,
-                abi.encode(0)
-            );
-            assets[2] = IAsset(address(want));
-        }
-        
-        //Sell ib -> weth
-        swaps[0] = IBalancerVault.BatchSwapStep(
-            ibEthPoolId,
-            0,
-            1,
-            _amountIn,
-            abi.encode(0)
-        );
+        uint256 weightedAPR = 0;
 
-        //Match the token address with the desired index for this trade
-        assets[0] = IAsset(ib);
-        assets[1] = IAsset(WNATIVE);
-        
-        //Only min we need to set is for the balance going in
-        limits[0] = int(_amountIn);
-
-        IERC20(ib).safeApprove(address(balancerVault), _amountIn);
-
-        balancerVault.batchSwap(
-            IBalancerVault.SwapKind.GIVEN_IN, 
-            swaps, 
-            assets, 
-            _getFundManagement(), 
-            limits, 
-            block.timestamp
-        );
-    }
-
-    function _getFundManagement() 
-        internal 
-        view 
-        returns (IBalancerVault.FundManagement memory fundManagement) 
-    {
-        fundManagement = IBalancerVault.FundManagement(
-                address(this),
-                false,
-                payable(address(this)),
-                false
-            );
-    }
-
-    function _getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (IVeledrome.route[] memory _path) {
-        bool isNative = _tokenIn == middleSwapToken || _tokenOut == middleSwapToken;
-        _path = new IVeledrome.route[](isNative ? 1 : 2);
-
-        if (isNative) {
-            _path[0] = IVeledrome.route(
-                _tokenIn,
-                _tokenOut,
-                false
-            );
-        } else {
-            _path[0] = IVeledrome.route(
-                _tokenIn,
-                middleSwapToken,
-                false
-            );
-            _path[1] = IVeledrome.route(
-                middleSwapToken,
-                _tokenOut,
-                stable
-            );
-        }
-    }
-
-    //External function to change the token we use for swaps and the bool for the second route in path
-    //Can only change to either the native or USDC.
-    function setMiddleSwapToken(address _middleSwapToken, bool _stable) external management {
-        require(_middleSwapToken == WNATIVE || _middleSwapToken == usdc);
-        middleSwapToken = _middleSwapToken;
-        stable = _stable;
-    }
-
-    function deposit() external override management {
-        uint256 balance = balanceOfWant();
-        require(cToken.mint(balance) == 0, "ctoken: mint fail");
-        _stake();
-    }
-
-    function _stake() internal {
-        uint256 balance = balanceOfCToken();
-        if(address(stakingRewards) == address(0) || balance == 0) return;
-
-        stakingRewards.stake(balance);
-    }
-
-    function _unStake(uint256 amount) internal {
-        if(address(stakingRewards) == address(0) || amount == 0) return;
-
-        stakingRewards.withdraw(Math.min(amount, stakedBalance()));
-    }
-
-    function manualUnstake(uint256 amount) external management {
-        stakingRewards.withdraw(Math.min(amount, stakedBalance()));
-    }
-
-    function withdrawAll() external override management returns (bool) {
-        //Call to accrue rewards and update exchange rate first
-        cToken.accrueInterest();
-        uint256 liquidity = want.balanceOf(address(cToken));
-        uint256 liquidityInCTokens = _convertFromUnderlying(liquidity);
-        _unStake(stakedBalance());
-        uint256 amountInCtokens = balanceOfCToken();
-
-        bool all;
-
-        if (liquidityInCTokens > 2) {
-            liquidityInCTokens = liquidityInCTokens-1;
-
-            if (amountInCtokens <= liquidityInCTokens) {
-                //we can take all
-                all = true;
-                cToken.redeem(amountInCtokens);
+        for (uint256 i = 0; i < lenders.length; i++) {
+            if (i != aprChoice) {
+                weightedAPR = weightedAPR.add(lenders[i].weightedApr());
             } else {
-                //redo or else price changes
-                cToken.mint(0);
-                liquidityInCTokens = _convertFromUnderlying(want.balanceOf(address(cToken)));
-                //take all we can
-                all = false;
-                cToken.redeem(liquidityInCTokens);
+                uint256 asset = lenders[i].nav();
+                if (asset < change) {
+                    //simplistic. not accurate
+                    change = asset;
+                }
+                weightedAPR = weightedAPR.add(lowestApr.mul(change));
+            }
+        }
+        uint256 bal = estimatedTotalAssets().add(change);
+        return weightedAPR.div(bal);
+    }
+
+    //estimates highest and lowest apr lenders. Public for debugging purposes but not much use to general public
+    function estimateAdjustPosition()
+        public
+        view
+        returns (
+            uint256 _lowest,
+            uint256 _lowestApr,
+            uint256 _highest,
+            uint256 _potential
+        )
+    {
+        //all loose assets are to be invested
+        uint256 looseAssets = want.balanceOf(address(this));
+
+        // our simple algo
+        // get the lowest apr strat
+        // cycle through and see who could take its funds plus want for the highest apr
+        _lowestApr = uint256(-1);
+        _lowest = 0;
+        uint256 lowestNav = 0;
+        for (uint256 i = 0; i < lenders.length; i++) {
+            if (lenders[i].hasAssets()) {
+                uint256 apr = lenders[i].apr();
+                if (apr < _lowestApr) {
+                    _lowestApr = apr;
+                    _lowest = i;
+                    lowestNav = lenders[i].nav();
+                }
             }
         }
 
-        uint256 looseBalance = balanceOfWant();
-        if(looseBalance > 0){
-            want.safeTransfer(address(strategy), looseBalance);
-        }
-        return all;
+        uint256 toAdd = lowestNav.add(looseAssets);
 
+        uint256 highestApr = 0;
+        _highest = 0;
+
+        for (uint256 i = 0; i < lenders.length; i++) {
+            uint256 apr;
+            apr = lenders[i].aprAfterDeposit(looseAssets);
+
+            if (apr > highestApr) {
+                highestApr = apr;
+                _highest = i;
+            }
+        }
+
+        //if we can improve apr by withdrawing we do so
+        _potential = lenders[_highest].aprAfterDeposit(toAdd);
     }
 
-    function _convertFromUnderlying(uint256 amountOfUnderlying) internal view returns (uint256 balance){
-        if (amountOfUnderlying == 0) {
-            balance = 0;
+    //gives estiomate of future APR with a change of debt limit. Useful for governance to decide debt limits
+    function estimatedFutureAPR(uint256 newDebtLimit) public view returns (uint256) {
+        uint256 oldDebtLimit = vault.strategies(address(this)).totalDebt;
+        uint256 change;
+        if (oldDebtLimit < newDebtLimit) {
+            change = newDebtLimit - oldDebtLimit;
+            return _estimateDebtLimitIncrease(change);
         } else {
-            balance = amountOfUnderlying.mul(1e18).div(cToken.exchangeRateStored());
+            change = oldDebtLimit - newDebtLimit;
+            return _estimateDebtLimitDecrease(change);
         }
     }
 
-    function hasAssets() external view override returns (bool) {
-        return underlyingBalanceStored() > 0 || balanceOfWant() > 0;
+    //cycle all lenders and collect balances
+    function lentTotalAssets() public view returns (uint256) {
+        uint256 nav = 0;
+        for (uint256 i = 0; i < lenders.length; i++) {
+            nav = nav.add(lenders[i].nav());
+        }
+        return nav;
     }
 
-    function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
-        uint256 cashPrior = want.balanceOf(address(cToken));
+    // we need to free up profit plus _debtOutstanding.
+    // If _debtOutstanding is more than we can free we get as much as possible
+    // should be no way for there to be a loss. we hope...
+    function prepareReturn(uint256 _debtOutstanding)
+        internal
+        override
+        returns (
+            uint256 _profit,
+            uint256 _loss,
+            uint256 _debtPayment
+        )
+    {
+        _profit = 0;
+        _loss = 0; //for clarity
+        _debtPayment = _debtOutstanding;
 
-        uint256 borrows = cToken.totalBorrows();
+        uint256 lentAssets = lentTotalAssets();
 
-        uint256 reserves = cToken.totalReserves();
+        uint256 looseAssets = want.balanceOf(address(this));
 
-        uint256 reserverFactor = cToken.reserveFactorMantissa();
+        uint256 total = looseAssets.add(lentAssets);
 
-        InterestRateModel model = cToken.interestRateModel();
+        if (lentAssets == 0) {
+            //no position to harvest or profit to report
+            if (_debtPayment > looseAssets) {
+                //we can only return looseAssets
+                _debtPayment = looseAssets;
+            }
 
-        //the supply rate is derived from the borrow rate, reserve factor and the amount of total borrows.
-        uint256 supplyRate = model.getSupplyRate(cashPrior.add(amount), borrows, reserves, reserverFactor);
-        supplyRate = supplyRate.add(compBlockShareInWant(amount));
+            return (_profit, _loss, _debtPayment);
+        }
 
-        return supplyRate.mul(blocksPerYear);
+        uint256 debt = vault.strategies(address(this)).totalDebt;
+
+        if (total > debt) {
+            _profit = total - debt;
+
+            uint256 amountToFree = _profit.add(_debtPayment);
+            //we need to add outstanding to our profit
+            //dont need to do logic if there is nothiing to free
+            if (amountToFree > 0 && looseAssets < amountToFree) {
+                //withdraw what we can withdraw
+                _withdrawSome(amountToFree.sub(looseAssets));
+                uint256 newLoose = want.balanceOf(address(this));
+
+                //if we dont have enough money adjust _debtOutstanding and only change profit if needed
+                if (newLoose < amountToFree) {
+                    if (_profit > newLoose) {
+                        _profit = newLoose;
+                        _debtPayment = 0;
+                    } else {
+                        _debtPayment = Math.min(newLoose - _profit, _debtPayment);
+                    }
+                }
+            }
+        } else {
+            //serious loss should never happen but if it does lets record it accurately
+            _loss = debt - total;
+            uint256 amountToFree = _loss.add(_debtPayment);
+
+            if (amountToFree > 0 && looseAssets < amountToFree) {
+                //withdraw what we can withdraw
+
+                _withdrawSome(amountToFree.sub(looseAssets));
+                uint256 newLoose = want.balanceOf(address(this));
+
+                //if we dont have enough money adjust _debtOutstanding and only change profit if needed
+                if (newLoose < amountToFree) {
+                    if (_loss > newLoose) {
+                        _loss = newLoose;
+                        _debtPayment = 0;
+                    } else {
+                        _debtPayment = Math.min(newLoose - _loss, _debtPayment);
+                    }
+                }
+            }
+        }
+    }
+
+    /*
+     * Key logic.
+     *   The algorithm moves assets from lowest return to highest
+     *   like a very slow idiots bubble sort
+     *   we ignore debt outstanding for an easy life
+     */
+    function adjustPosition(uint256 _debtOutstanding) internal override {
+        _debtOutstanding; //ignored. we handle it in prepare return
+        //emergency exit is dealt with at beginning of harvest
+        if (emergencyExit) {
+            return;
+        }
+
+        //we just keep all money in want if we dont have any lenders
+        if (lenders.length == 0) {
+            return;
+        }
+
+        (uint256 lowest, uint256 lowestApr, uint256 highest, uint256 potential) = estimateAdjustPosition();
+
+        if (potential > lowestApr) {
+            //apr should go down after deposit so wont be withdrawing from self
+            lenders[lowest].withdrawAll();
+        }
+
+        uint256 bal = want.balanceOf(address(this));
+        if (bal > 0) {
+            want.safeTransfer(address(lenders[highest]), bal);
+            lenders[highest].deposit();
+        }
+    }
+
+    struct lenderRatio {
+        address lender;
+        //share x 1000
+        uint16 share;
+    }
+
+    //share must add up to 1000. 500 means 50% etc
+    function manualAllocation(lenderRatio[] memory _newPositions) public onlyAuthorized {
+        uint256 share = 0;
+
+        for (uint256 i = 0; i < lenders.length; i++) {
+            lenders[i].withdrawAll();
+        }
+
+        uint256 assets = want.balanceOf(address(this));
+
+        for (uint256 i = 0; i < _newPositions.length; i++) {
+            bool found = false;
+
+            //might be annoying and expensive to do this second loop but worth it for safety
+            for (uint256 j = 0; j < lenders.length; j++) {
+                if (address(lenders[j]) == _newPositions[i].lender) {
+                    found = true;
+                }
+            }
+            require(found, "NOT LENDER");
+
+            share = share.add(_newPositions[i].share);
+            uint256 toSend = assets.mul(_newPositions[i].share).div(1000);
+            want.safeTransfer(_newPositions[i].lender, toSend);
+            IGenericLender(_newPositions[i].lender).deposit();
+        }
+
+        require(share == 1000, "SHARE!=1000");
+    }
+
+    //cycle through withdrawing from worst rate first
+    function _withdrawSome(uint256 _amount) internal returns (uint256 amountWithdrawn) {
+        if (lenders.length == 0) {
+            return 0;
+        }
+
+        //dont withdraw dust
+        if (_amount < withdrawalThreshold) {
+            return 0;
+        }
+
+        amountWithdrawn = 0;
+        //most situations this will only run once. Only big withdrawals will be a gas guzzler
+        uint256 j = 0;
+        while (amountWithdrawn < _amount) {
+            uint256 lowestApr = uint256(-1);
+            uint256 lowest = 0;
+            for (uint256 i = 0; i < lenders.length; i++) {
+                if (lenders[i].hasAssets()) {
+                    uint256 apr = lenders[i].apr();
+                    if (apr < lowestApr) {
+                        lowestApr = apr;
+                        lowest = i;
+                    }
+                }
+            }
+            if (!lenders[lowest].hasAssets()) {
+                return amountWithdrawn;
+            }
+            amountWithdrawn = amountWithdrawn.add(lenders[lowest].withdraw(_amount - amountWithdrawn));
+            j++;
+            //dont want infinite loop
+            if (j >= 6) {
+                return amountWithdrawn;
+            }
+        }
+    }
+
+    /*
+     * Liquidate as many assets as possible to `want`, irregardless of slippage,
+     * up to `_amountNeeded`. Any excess should be re-invested here as well.
+     */
+    function liquidatePosition(uint256 _amountNeeded) internal override returns (uint256 _amountFreed, uint256 _loss) {
+        uint256 _balance = want.balanceOf(address(this));
+
+        if (_balance >= _amountNeeded) {
+            //if we don't set reserve here withdrawer will be sent our full balance
+            return (_amountNeeded, 0);
+        } else {
+            uint256 received = _withdrawSome(_amountNeeded - _balance).add(_balance);
+            if (received >= _amountNeeded) {
+                return (_amountNeeded, 0);
+            } else {
+                return (received, 0);
+            }
+        }
+    }
+
+    function ethToWant(uint256 _amount) public override view returns (uint256) {
+        //two situations
+        //1 we use external oracle
+        //1 return _amount.
+        if (wantToEthOracle != address(0)) {
+            return IWantToEth(wantToEthOracle).ethToWant(_amount);
+        } else {
+            return _amount;
+        }
+    }
+
+    function liquidateAllPositions() internal override returns (uint256 _amountFreed) {
+        _amountFreed = _withdrawSome(lentTotalAssets());
+    }
+
+    /*
+     * revert if we can't withdraw full balance
+     */
+    function prepareMigration(address _newStrategy) internal override {
+        uint256 outstanding = vault.strategies(address(this)).totalDebt;
+        (, uint256 loss, uint256 wantBalance) = prepareReturn(outstanding);
     }
 
     function protectedTokens() internal view override returns (address[] memory) {
         address[] memory protected = new address[](1);
         protected[0] = address(want);
         return protected;
-    }
-
-    // ---------------------- YSWAPS FUNCTIONS ----------------------
-    function setTradeFactory(address _tradeFactory) external onlyGovernance {
-        if (tradeFactory != address(0)) {
-            _removeTradeFactoryPermissions();
-        }
-
-        ITradeFactory tf = ITradeFactory(_tradeFactory);
-
-        IERC20(ib).safeApprove(_tradeFactory, type(uint256).max);
-        tf.enable(ib, address(want));
-        
-        tradeFactory = _tradeFactory;
-    }
-
-    function removeTradeFactoryPermissions() external management {
-        _removeTradeFactoryPermissions();
-    }
-
-    function _removeTradeFactoryPermissions() internal {
-        IERC20(ib).safeApprove(tradeFactory, 0);
-        
-        tradeFactory = address(0);
-    }
-
-    modifier keepers() {
-        require(
-            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
-            "!keepers"
-        );
-        _;
     }
 }
