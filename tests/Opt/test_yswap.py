@@ -41,6 +41,8 @@ def test_yswap(
     with reverts():
         plugin.manualClaimAndDontSell({"from": rando})
 
+    plugin.setRewardStuff(plugin.minIbToSell(), 10, {"from": strategist})
+
     assert plugin.harvestTrigger("1") == True
 
     assert ib.balanceOf(plugin.address) == 0
