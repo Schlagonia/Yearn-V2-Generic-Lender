@@ -96,7 +96,7 @@ contract GenericCompoundV3 is GenericLenderBase {
         GenericCompoundV3(newLender).initialize(_comet);
     }
 
-    function setRewardStuff(uint256 _minCompToSell, uint256 _minRewardToHavest) external management {
+    function setMinRewardAmounts(uint256 _minCompToSell, uint256 _minRewardToHavest) external management {
         minCompToSell = _minCompToSell;
         minRewardToHarvest = _minRewardToHavest;
     }
@@ -130,7 +130,7 @@ contract GenericCompoundV3 is GenericLenderBase {
 
     function _apr() internal view returns (uint256) {
         uint utilization = comet.getUtilization();
-        uint supplyRate = comet.getSupplyRate(utilization) * SECONDS_PER_YEAR;
+        uint supplyRate = comet.getSupplyRate(utilization).mul(SECONDS_PER_YEAR);
         uint rewardRate = getRewardAprForSupplyBase(getPriceFeedAddress(comp), 0);
         return uint256(supplyRate.add(rewardRate));
     }
@@ -145,8 +145,8 @@ contract GenericCompoundV3 is GenericLenderBase {
         uint rewardTokenPriceInUsd = getCompoundPrice(rewardTokenPriceFeed);
         uint wantPriceInUsd = getCompoundPrice(comet.baseTokenPriceFeed());
         uint wantTotalSupply = comet.totalSupply().add(newAmount);
-        uint rewardToSuppliersPerDay = comet.baseTrackingSupplySpeed() * SECONDS_PER_DAY * BASE_INDEX_SCALE / BASE_MANTISSA;
-        return (rewardTokenPriceInUsd * rewardToSuppliersPerDay / (wantTotalSupply * wantPriceInUsd)) * DAYS_PER_YEAR;
+        uint rewardToSuppliersPerDay = comet.baseTrackingSupplySpeed().mul(SECONDS_PER_DAY).mul(BASE_INDEX_SCALE).div(BASE_MANTISSA);
+        return (rewardTokenPriceInUsd.mul(rewardToSuppliersPerDay).div((wantTotalSupply.mul(wantPriceInUsd)))).mul(DAYS_PER_YEAR);
     }
 
     function getPriceFeedAddress(address asset) public view returns (address) {
@@ -169,11 +169,9 @@ contract GenericCompoundV3 is GenericLenderBase {
     //emergency withdraw. sends balance plus amount to governance
     //Pass in uint256.max to withdraw everything
     function emergencyWithdraw(uint256 amount) external override onlyGovernance {
-        if(amount == type(uint256).max) {
-            //Accrue account to get the most accurate amount
-            comet.accrueAccount(address(this));
-            amount = comet.balanceOf(address(this));
-        }
+        //Accrue account to get the most accurate amount on withdraw
+        comet.accrueAccount(address(this));
+
         //dont care about errors here. we want to exit what we can
         comet.withdraw(address(want), amount);
 
@@ -332,7 +330,7 @@ contract GenericCompoundV3 is GenericLenderBase {
         uint256 supply = comet.totalSupply();
 
         uint256 newUtilization = borrows.mul(1e18).div(supply.add(amount));
-        uint256 newSupply = comet.getSupplyRate(newUtilization) * SECONDS_PER_YEAR;
+        uint256 newSupply = comet.getSupplyRate(newUtilization).mul(SECONDS_PER_YEAR);
 
         uint256 newReward = getRewardAprForSupplyBase(getPriceFeedAddress(comp), amount);
         return newSupply.add(newReward);
