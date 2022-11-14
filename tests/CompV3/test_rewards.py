@@ -153,6 +153,9 @@ def test_no_rewards(
     assert plugin.getRewardsOwed() == 0
     assert plugin.getRewardAprForSupplyBase(plugin.getPriceFeedAddress(comp), 0) == 0
 
+    #Make sure the base index scale getter works
+    assert cUsdc.baseIndexScale() > 0
+
     #should still be able to call harvest
     plugin.harvest({"from": strategist})
 
