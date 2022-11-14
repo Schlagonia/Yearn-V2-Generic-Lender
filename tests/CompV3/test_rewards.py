@@ -187,12 +187,12 @@ def test_setter_functions(chain,
     with brownie.reverts():
         plugin.setKeep3r(accounts[1], {"from": rando})
     with brownie.reverts():
-        plugin.setRewardStuff(minComp, minReward, {"from": rando})
+        plugin.setMinRewardAmounts(minComp, minReward, {"from": rando})
     with brownie.reverts():
         plugin.setUniFees(compEthFee, ethWantFee, {"from": rando})
 
     plugin.setKeep3r(accounts[1], {"from": strategist})
-    plugin.setRewardStuff(minComp, minReward, {"from": strategist})
+    plugin.setMinRewardAmounts(minComp, minReward, {"from": strategist})
     plugin.setUniFees(compEthFee, ethWantFee, {"from": strategist})
 
     assert plugin.keep3r() == accounts[1]
@@ -213,12 +213,12 @@ def test_setter_functions(chain,
     with brownie.reverts():
         clone.setKeep3r(accounts[1], {"from": rando})
     with brownie.reverts():
-        clone.setRewardStuff(minComp, minReward, {"from": rando})
+        clone.setMinRewardAmounts(minComp, minReward, {"from": rando})
     with brownie.reverts():
         clone.setUniFees(compEthFee, ethWantFee, {"from": rando})
 
     clone.setKeep3r(accounts[1], {"from": strategist})
-    clone.setRewardStuff(minComp, minReward, {"from": strategist})
+    clone.setMinRewardAmounts(minComp, minReward, {"from": strategist})
     clone.setUniFees(compEthFee, ethWantFee, {"from": strategist})
 
     assert clone.keep3r() == accounts[1]
