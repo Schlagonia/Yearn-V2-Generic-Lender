@@ -169,9 +169,6 @@ contract GenericCompoundV3 is GenericLenderBase {
     //emergency withdraw. sends balance plus amount to governance
     //Pass in uint256.max to withdraw everything
     function emergencyWithdraw(uint256 amount) external override onlyGovernance {
-        //Accrue account to get the most accurate amount on withdraw
-        comet.accrueAccount(address(this));
-
         //dont care about errors here. we want to exit what we can
         comet.withdraw(address(want), amount);
 
