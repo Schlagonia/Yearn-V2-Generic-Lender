@@ -225,7 +225,7 @@ contract GenericCompoundV3 is GenericLenderBase {
     function harvestTrigger(uint256 /*callCost*/) external view returns(bool) {
         if(!isBaseFeeAcceptable()) return false;
 
-        if(getRewardsOwed().add(IERC20(comp).balanceOf(address(this))) >= minRewardToHarvest) return true;
+        if(getRewardsOwed().add(IERC20(comp).balanceOf(address(this))) > minRewardToHarvest) return true;
     }
   
     /*
@@ -374,7 +374,7 @@ contract GenericCompoundV3 is GenericLenderBase {
 
     function _removeTradeFactoryPermissions() internal {
         IERC20(comp).safeApprove(tradeFactory, 0);
-        
+        ITradeFactory(tradeFactory).disable(comp, address(want));
         tradeFactory = address(0);
     }
 }

@@ -67,7 +67,7 @@ def test_rewards(chain,
     plugin.setUniFees(3000, 500, {"from": strategist})
 
     #send come comp to the strategy
-    toSend = 10 * (10 **18)
+    toSend = 11 * (10 **18)
     comp.transfer(plugin.address, toSend, {"from": whale})
     assert comp.balanceOf(plugin.address) == toSend     
     assert plugin.harvestTrigger(10) == True
@@ -287,7 +287,7 @@ def test_trade_factory(chain,
     strategy.harvest({"from": strategist})
 
     #send come comp to the strategy
-    toSend = 10 * (10 **18)
+    toSend = 11 * (10 **18)
     comp.transfer(plugin.address, toSend, {"from": whale})
     assert comp.balanceOf(plugin.address) == toSend     
     assert plugin.harvestTrigger(10) == True
