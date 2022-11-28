@@ -27,7 +27,6 @@ interface IBaseFee {
 }
 
 contract GenericCompoundV3 is GenericLenderBase {
-    using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
@@ -142,10 +141,12 @@ contract GenericCompoundV3 is GenericLenderBase {
     * @return The reward APR in USD as a decimal scaled up by 1e18
     */
     function getRewardAprForSupplyBase(address rewardTokenPriceFeed, uint newAmount) public view returns (uint) {
+        uint rewardToSuppliersPerDay = comet.baseTrackingSupplySpeed().mul(SECONDS_PER_DAY).mul(BASE_INDEX_SCALE).div(BASE_MANTISSA);
+        if(rewardToSuppliersPerDay == 0) return 0;
+
         uint rewardTokenPriceInUsd = getCompoundPrice(rewardTokenPriceFeed);
         uint wantPriceInUsd = getCompoundPrice(comet.baseTokenPriceFeed());
         uint wantTotalSupply = comet.totalSupply().add(newAmount);
-        uint rewardToSuppliersPerDay = comet.baseTrackingSupplySpeed().mul(SECONDS_PER_DAY).mul(BASE_INDEX_SCALE).div(BASE_MANTISSA);
         return (rewardTokenPriceInUsd.mul(rewardToSuppliersPerDay).div((wantTotalSupply.mul(wantPriceInUsd)))).mul(DAYS_PER_YEAR);
     }
 
