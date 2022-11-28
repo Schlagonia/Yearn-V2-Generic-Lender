@@ -33,6 +33,7 @@ def test_good_migration(
     chain.sleep(30 * 13)
     chain.mine(30)
 
+    
     strategy.harvest({"from": strategist})
 
     strategy_debt = vault.strategies(strategy)[6]  # totalDebt

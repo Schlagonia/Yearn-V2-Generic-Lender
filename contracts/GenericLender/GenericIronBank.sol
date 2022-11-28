@@ -77,8 +77,6 @@ contract GenericIronBank is GenericLenderBase {
         IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
     bytes32 public constant ibEthPoolId = 
         bytes32(0xefb0d9f51efd52d7589a9083a6d0ca4de416c24900020000000000000000002c);
-    //Can be set for a weth - want lp balncer pool to make harvests work
-    bytes32 public ethWantPoolId;
 
     address public keep3r;
     address public tradeFactory;
@@ -118,7 +116,8 @@ contract GenericIronBank is GenericLenderBase {
         middleSwapToken = usdc;
         //default to ignore printing due to lack of IB liquidity
         ignorePrinting = true;
-        dustThreshold = 1_000; //depends on want
+        dustThreshold = 100; //depends on want
+        minRewardToHarvest = 1e18;
     }
 
     function cloneIronBankLender(
@@ -150,8 +149,7 @@ contract GenericIronBank is GenericLenderBase {
         stakingRewards = IStakingRewards(_stakingRewards);
     }
 
-    function setRewardStuff(bytes32 _ethWantPoolId, uint256 _minIbToSell, uint256 _minRewardToHavest) external management {
-        ethWantPoolId = _ethWantPoolId;
+    function setRewardStuff(uint256 _minIbToSell, uint256 _minRewardToHavest) external management {
         minIbToSell = _minIbToSell;
         minRewardToHarvest = _minRewardToHavest;
     }
@@ -351,28 +349,11 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function _swapFrom(uint256 _amountIn) internal{
-        IBalancerVault.BatchSwapStep[] memory swaps;
-        IAsset[] memory assets;
-        int[] memory limits;
-        if(address(want) == WNATIVE) {
-            swaps = new IBalancerVault.BatchSwapStep[](1);
-            assets = new IAsset[](2);
-            limits = new int[](2);
-        } else{
-            swaps = new IBalancerVault.BatchSwapStep[](2);
-            assets = new IAsset[](3);
-            limits = new int[](3);
-            //Sell WETH -> want
-            swaps[1] = IBalancerVault.BatchSwapStep(
-                ethWantPoolId,
-                1,
-                2,
-                0,
-                abi.encode(0)
-            );
-            assets[2] = IAsset(address(want));
-        }
-        
+        //First get rid of IB using the Beethoven pool into WETH
+        IBalancerVault.BatchSwapStep[] memory swaps = new IBalancerVault.BatchSwapStep[](1);
+        IAsset[] memory assets = new IAsset[](2);
+        int[] memory limits = new int[](2);
+
         //Sell ib -> weth
         swaps[0] = IBalancerVault.BatchSwapStep(
             ibEthPoolId,
@@ -399,6 +380,20 @@ contract GenericIronBank is GenericLenderBase {
             limits, 
             block.timestamp
         );
+
+        if(address(want) != WNATIVE) {
+            //Swap from WETH to want through Velederome
+            uint256 wethBalance = IERC20(WNATIVE).balanceOf(address(this));
+            IERC20(WNATIVE).safeApprove(address(router), wethBalance);
+
+            router.swapExactTokensForTokens(
+                wethBalance, 
+                0, 
+                _getTokenOutPath(WNATIVE, address(want)), 
+                address(this), 
+                block.timestamp
+            );
+        }
     }
 
     function _getFundManagement() 

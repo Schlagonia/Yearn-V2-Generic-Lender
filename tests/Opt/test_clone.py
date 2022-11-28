@@ -111,7 +111,7 @@ def test_clone_harvest(
     strategy.harvest({"from": gov})
     assert new_plugin.harvestTrigger("100000000") == False
     sleep(chain, 20)
-    #ib.transfer(new_plugin.address, 100e18, {"from": whaleIb})
+    ib.transfer(new_plugin.address, 1e18, {"from": whaleIb})
     assert new_plugin.harvestTrigger("100000000") == True 
     before_bal = new_plugin.underlyingBalanceStored()
     before_stake = new_plugin.stakedBalance()
@@ -220,6 +220,7 @@ def test_clone(
         chain.sleep(15 * 30)
         chain.mine(waitBlock)
 
+        cloned_lender.harvest({"from":strategist})
         cloned_strategy.harvest({"from": strategist})
         chain.sleep(6 * 3600 + 1)  # to avoid sandwich protection
         chain.mine(1)
