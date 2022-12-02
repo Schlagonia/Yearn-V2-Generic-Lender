@@ -47,7 +47,7 @@ def whale(accounts):
 
 @pytest.fixture
 def whaleUsdc(accounts):
-    yield accounts.at("0xEbe80f029b1c02862B9E8a70a7e5317C06F62Cae", force=True)
+    yield accounts.at("0xf390830DF829cf22c53c8840554B98eafC5dCBc2", force=True)
 
 @pytest.fixture
 def whaleIb(accounts):

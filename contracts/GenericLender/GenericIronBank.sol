@@ -41,14 +41,13 @@ interface IVeledrome {
 } 
 
 contract GenericIronBank is GenericLenderBase {
-    using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
     //Seconds per year for calculations
-    uint256 private constant blocksPerYear = 3154 * 10**4;
+    uint256 internal constant blocksPerYear = 3154 * 10**4;
     //Reward token
-    address public constant ib = 
+    address internal constant ib = 
         0x00a35FD824c717879BF370E70AC6868b95870Dfb;
     
     //Contracts for staking i tokens
@@ -73,7 +72,7 @@ contract GenericIronBank is GenericLenderBase {
     IVeledrome public constant router =
         IVeledrome(0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9);
     //Balancer Variables for swapping
-    IBalancerVault public constant balancerVault =
+    IBalancerVault internal constant balancerVault =
         IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
     bytes32 public constant ibEthPoolId = 
         bytes32(0xefb0d9f51efd52d7589a9083a6d0ca4de416c24900020000000000000000002c);
