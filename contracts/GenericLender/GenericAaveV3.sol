@@ -381,6 +381,8 @@ contract GenericAaveV3 is GenericLenderBase {
             if(token == WNATIVE){
                 expectedRewards += rewards[i];
             } else if(token == address(stkAave)) {
+                // if stkAave is a reward token we should only be harvesting after the cooldown
+                if(!_checkCooldown()) return false;
                 expectedRewards += _checkPrice(AAVE, WNATIVE, rewards[i]);
             } else {
                 expectedRewards += _checkPrice(token, WNATIVE, rewards[i]);
