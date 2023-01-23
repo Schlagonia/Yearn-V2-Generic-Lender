@@ -16,6 +16,11 @@ import {IPool} from "../Interfaces/Aave/V3/IPool.sol";
 import {IProtocolDataProvider} from "../Interfaces/Aave/V3/IProtocolDataProvider.sol";
 import {IRewardsController} from "../Interfaces/Aave/V3/IRewardsController.sol";
 import {DataTypesV3} from "../Libraries/Aave/V3/DataTypesV3.sol";
+import {ITradeFactory} from "../Interfaces/ySwaps/ITradeFactory.sol";
+
+interface IBaseFee {
+    function isCurrentBaseFeeAcceptable() external view returns (bool);
+}
 
 //-- IReserveInterestRateStrategy implemented manually to avoid compiler errors for aprAfterDeposit function --//
 /**
@@ -64,8 +69,8 @@ contract GenericAaveV3 is GenericLenderBase {
     address public keep3r;
 
     bool public isIncentivised;
-    //Amount to multiply callcost by in harvestTrigger
-    uint256 public profitFactor;
+    //Amount to return true in harvestTrigger
+    uint256 public minRewardsToHarvest;
 
     // Used to assure we stop infinite while loops
     //Should never be more reward tokens than 5
@@ -83,6 +88,8 @@ contract GenericAaveV3 is GenericLenderBase {
     address public secondRouter;
     //Uni v2 router to be used
     IUniswapV2Router02 public router;
+
+    address public tradeFactory;
 
     uint256 constant internal SECONDS_IN_YEAR = 365 days;
 
@@ -145,7 +152,7 @@ contract GenericAaveV3 is GenericLenderBase {
         WNATIVE = _wNative;
         baseRouter = _baseRouter;
         secondRouter = _secondRouter;
-        profitFactor = 100;
+        minRewardsToHarvest = 10e18;
         router = IUniswapV2Router02(_baseRouter);
     }
 
@@ -175,8 +182,8 @@ contract GenericAaveV3 is GenericLenderBase {
         keep3r = _keep3r;
     }
 
-    function setProfitFactor(uint256 _profitFactor) external management {
-        profitFactor = _profitFactor;
+    function setMinRewardsToHarvest(uint256 _minRewardsToHarvest) external management {
+        minRewardsToHarvest = _minRewardsToHarvest;
     }
 
     function deposit() external override management {
@@ -383,13 +390,23 @@ contract GenericAaveV3 is GenericLenderBase {
             } else if(token == address(stkAave)) {
                 // if stkAave is a reward token we should only be harvesting after the cooldown
                 if(!_checkCooldown()) return false;
-                expectedRewards += _checkPrice(AAVE, WNATIVE, rewards[i]);
+                // account for both pending and claimed stkAave
+                expectedRewards += _checkPrice(AAVE, WNATIVE, rewards[i] + IERC20(address(stkAave)).balanceOf(address(this)));
             } else {
                 expectedRewards += _checkPrice(token, WNATIVE, rewards[i]);
             }
         }
         
-        return expectedRewards >= callcost.mul(profitFactor);
+        if(expectedRewards >= minRewardsToHarvest) {
+            return isBaseFeeAcceptable();
+        }
+    }
+
+    // check if the current baseFee is below our external target
+    function isBaseFeeAcceptable() internal view returns (bool) {
+        return
+            IBaseFee(0xb5e1CAcB567d98faaDB60a1fD4820720141f064F)
+                .isCurrentBaseFeeAcceptable();
     }
 
     function _nav() internal view returns (uint256) {
@@ -614,8 +631,10 @@ contract GenericAaveV3 is GenericLenderBase {
                 address token = rewardTokens[i];
                 if(token == address(stkAave)) {
                     IERC20(AAVE).safeApprove(tradeFactory, 0);
+                    ITradeFactory(tradeFactory).disable(AAVE, address(want));
                 } else {
                     IERC20(token).safeApprove(tradeFactory, 0);
+                    ITradeFactory(tradeFactory).disable(token, address(want));
                 }
             }
         }
