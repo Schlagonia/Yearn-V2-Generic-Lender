@@ -52,8 +52,11 @@ contract GenericCompoundV3 is GenericLenderBase {
     CometRewards public constant rewardsContract = 
         CometRewards(0x1B0e765F6224C21223AeA2af16c1C46E38885a40); 
 
-    uint internal BASE_MANTISSA;
-    uint internal BASE_INDEX_SCALE;
+    // price feeds for the reward apr calculation, can be updated manually if needed
+    address public rewardTokenPriceFeed;
+    address public baseTokenPriceFeed;
+
+    uint internal scaler;
 
     uint256 public minCompToSell;
     uint256 public minRewardToHarvest;
@@ -76,11 +79,19 @@ contract GenericCompoundV3 is GenericLenderBase {
         comet = Comet(_comet);
         require(comet.baseToken() == address(want), "wrong token");
         
-        BASE_MANTISSA = comet.baseScale();
-        BASE_INDEX_SCALE = comet.baseIndexScale();
+        uint BASE_MANTISSA = comet.baseScale();
+        uint BASE_INDEX_SCALE = comet.baseIndexScale();
+        uint diff = BASE_INDEX_SCALE > BASE_MANTISSA ? BASE_INDEX_SCALE / BASE_MANTISSA : BASE_MANTISSA / BASE_INDEX_SCALE;
+        // this is needed for reward apr calculations based on decimals of want
+        scaler = (10 ** vault.decimals()).mul(diff);
 
         want.safeApprove(_comet, type(uint256).max);
         IERC20(comp).safeApprove(address(router), type(uint256).max);
+
+        // default to the base token feed given
+        baseTokenPriceFeed = comet.baseTokenPriceFeed();
+        // default to the compound feed
+        rewardTokenPriceFeed = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
 
         minCompToSell = 0.05 ether;
         minRewardToHarvest = 10 ether;
@@ -107,6 +118,14 @@ contract GenericCompoundV3 is GenericLenderBase {
         ethToWantFee = _ethToWant;
     }
 
+    function setPriceFeeds(address _baseTokenPriceFeed, address _rewardTokenPriceFeed) external management {
+        // just check the call doesnt revert. We dont care about the amount returned 
+        comet.getPrice(_baseTokenPriceFeed);
+        comet.getPrice(_rewardTokenPriceFeed);
+        baseTokenPriceFeed = _baseTokenPriceFeed;
+        rewardTokenPriceFeed = _rewardTokenPriceFeed;
+    }
+
     function setKeep3r(address _keep3r) external management {
         keep3r = _keep3r;
     }
@@ -130,32 +149,24 @@ contract GenericCompoundV3 is GenericLenderBase {
     function _apr() internal view returns (uint256) {
         uint utilization = comet.getUtilization();
         uint supplyRate = comet.getSupplyRate(utilization).mul(SECONDS_PER_YEAR);
-        uint rewardRate = getRewardAprForSupplyBase(getPriceFeedAddress(comp), 0);
+        uint rewardRate = getRewardAprForSupplyBase(0);
         return uint256(supplyRate.add(rewardRate));
     }
 
     /*
     * Get the current reward for supplying APR in Compound III
-    * @param rewardTokenPriceFeed The address of the reward token (e.g. COMP) price feed
     * @param newAmount Any amount that will be added to the total supply in a deposit
     * @return The reward APR in USD as a decimal scaled up by 1e18
     */
-    function getRewardAprForSupplyBase(address rewardTokenPriceFeed, uint newAmount) public view returns (uint) {
-        uint rewardToSuppliersPerDay = comet.baseTrackingSupplySpeed().mul(SECONDS_PER_DAY).mul(BASE_INDEX_SCALE).div(BASE_MANTISSA);
+    function getRewardAprForSupplyBase(uint newAmount) public view returns (uint) {
+        Comet _comet = comet;
+        uint rewardToSuppliersPerDay = _comet.baseTrackingSupplySpeed().mul(SECONDS_PER_DAY).mul(scaler);
         if(rewardToSuppliersPerDay == 0) return 0;
 
-        uint rewardTokenPriceInUsd = getCompoundPrice(rewardTokenPriceFeed);
-        uint wantPriceInUsd = getCompoundPrice(comet.baseTokenPriceFeed());
-        uint wantTotalSupply = comet.totalSupply().add(newAmount);
-        return (rewardTokenPriceInUsd.mul(rewardToSuppliersPerDay).div((wantTotalSupply.mul(wantPriceInUsd)))).mul(DAYS_PER_YEAR);
-    }
-
-    function getPriceFeedAddress(address asset) public view returns (address) {
-        return comet.getAssetInfoByAddress(asset).priceFeed;
-    }
-
-    function getCompoundPrice(address singleAssetPriceFeed) public view returns (uint) {
-        return comet.getPrice(singleAssetPriceFeed);
+        uint rewardTokenPriceInUsd = _comet.getPrice(rewardTokenPriceFeed);
+        uint wantPriceInUsd = _comet.getPrice(baseTokenPriceFeed);
+        uint wantTotalSupply = _comet.totalSupply().add(newAmount);
+        return rewardTokenPriceInUsd.mul(rewardToSuppliersPerDay).div(wantTotalSupply.mul(wantPriceInUsd)).mul(DAYS_PER_YEAR);
     }
 
     function weightedApr() external view override returns (uint256) {
@@ -330,7 +341,7 @@ contract GenericCompoundV3 is GenericLenderBase {
         uint256 newUtilization = borrows.mul(1e18).div(supply.add(amount));
         uint256 newSupply = comet.getSupplyRate(newUtilization).mul(SECONDS_PER_YEAR);
 
-        uint256 newReward = getRewardAprForSupplyBase(getPriceFeedAddress(comp), amount);
+        uint256 newReward = getRewardAprForSupplyBase(amount);
         return newSupply.add(newReward);
     }
 

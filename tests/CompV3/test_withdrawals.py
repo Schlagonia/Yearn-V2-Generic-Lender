@@ -20,13 +20,14 @@ def test_withdrawals_work(
     vault,
     strategy,
     fn_isolation,
+    currency
 ):
-    starting_balance = usdc.balanceOf(strategist)
-    currency = usdc
+    starting_balance = currency.balanceOf(strategist)
+
     decimals = currency.decimals()
 
-    usdc.approve(vault, 2 ** 256 - 1, {"from": whale})
-    usdc.approve(vault, 2 ** 256 - 1, {"from": strategist})
+    currency.approve(vault, 2 ** 256 - 1, {"from": whale})
+    currency.approve(vault, 2 ** 256 - 1, {"from": strategist})
 
     deposit_limit = 1_000_000_000 * (10 ** (decimals))
     debt_ratio = 10000
@@ -69,7 +70,7 @@ def test_withdrawals_work(
         shareprice = vault.pricePerShare()
 
         shares = vault.balanceOf(strategist)
-        expectedout = shares * (shareprice / 1e18) * (10 ** (decimals * 2))
+        expectedout = shares * shareprice / (10 ** (decimals))
         balanceBefore = currency.balanceOf(strategist)
         # print(f"Lender: {j[0]}, Deposits: {formS.format(plugin.nav()/1e6)}")
 
@@ -83,7 +84,7 @@ def test_withdrawals_work(
         shareprice = vault.pricePerShare()
 
         shares = vault.balanceOf(whale)
-        expectedout = shares * (shareprice / 1e18) * (10 ** (decimals * 2))
+        expectedout = shares * shareprice / (10 ** (decimals))
         balanceBefore = currency.balanceOf(whale)
         vault.withdraw(vault.balanceOf(whale), {"from": whale})
         balanceAfter = currency.balanceOf(whale)
@@ -105,7 +106,7 @@ def test_withdrawals_work(
     shareprice = vault.pricePerShare()
 
     shares = vault.balanceOf(strategist)
-    expectedout = shares * (shareprice / 1e18) * (10 ** (decimals * 2))
+    expectedout = shares * shareprice / (10 ** (decimals))
     balanceBefore = currency.balanceOf(strategist)
 
     # genericStateOfStrat(strategy, currency, vault)
@@ -125,7 +126,7 @@ def test_withdrawals_work(
     shareprice = vault.pricePerShare()
 
     shares = vault.balanceOf(whale)
-    expectedout = shares * (shareprice / 1e18) * (10 ** (decimals * 2))
+    expectedout = shares * shareprice / (10 ** (decimals))
     balanceBefore = currency.balanceOf(whale)
     vault.withdraw(vault.balanceOf(whale), {"from": whale})
     balanceAfter = currency.balanceOf(whale)

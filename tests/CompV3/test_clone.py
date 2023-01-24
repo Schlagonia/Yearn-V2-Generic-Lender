@@ -6,7 +6,7 @@ import brownie
 
 def test_clone(
     chain,
-    usdc,
+    currency,
     whale,
     gov,
     strategist,
@@ -15,7 +15,7 @@ def test_clone(
     Strategy,
     strategy,
     GenericCompoundV3,
-    cUsdc,
+    cToken,
 ):
     # Clone magic
     tx = strategy.clone(vault)
@@ -32,7 +32,7 @@ def test_clone(
     # Clone the Comp lender
     original_comp = GenericCompoundV3.at(strategy.lenders(strategy.numLenders() - 1))
     tx = original_comp.cloneCompoundV3Lender(
-        cloned_strategy, "ClonedCompUSDC", cUsdc, {"from": gov}
+        cloned_strategy, "ClonedCompUSDC", cToken, {"from": gov}
     )
     cloned_lender = GenericCompoundV3.at(tx.return_value)
     assert cloned_lender.lenderName() == "ClonedCompUSDC"
@@ -40,14 +40,14 @@ def test_clone(
     cloned_strategy.addLender(cloned_lender, {"from": gov})
     
     with brownie.reverts():
-        cloned_lender.initialize(cUsdc, {'from': gov})
+        cloned_lender.initialize(cToken, {'from': gov})
 
-    starting_balance = usdc.balanceOf(strategist)
-    currency = usdc
+    starting_balance = currency.balanceOf(strategist)
+    currency = currency
     decimals = currency.decimals()
 
-    usdc.approve(vault, 2 ** 256 - 1, {"from": whale})
-    usdc.approve(vault, 2 ** 256 - 1, {"from": strategist})
+    currency.approve(vault, 2 ** 256 - 1, {"from": whale})
+    currency.approve(vault, 2 ** 256 - 1, {"from": strategist})
 
     deposit_limit = 1_000_000_000 * (10 ** (decimals))
     debt_ratio = 10_000
@@ -96,7 +96,7 @@ def test_clone(
             shares = vault.balanceOf(whale)
             print("whale has:", shares)
             sharesout = int(shares * percent / 100)
-            expectedout = sharesout * (shareprice / 1e18) * (10 ** (decimals * 2))
+            expectedout = sharesout * shareprice / (10 ** (decimals))
 
             balanceBefore = currency.balanceOf(whale)
             vault.withdraw(sharesout, {"from": whale})
@@ -114,7 +114,7 @@ def test_clone(
     shareprice = vault.pricePerShare()
 
     shares = vault.balanceOf(strategist)
-    expectedout = shares * (shareprice / 1e18) * (10 ** (decimals * 2))
+    expectedout = shares * shareprice / (10 ** (decimals))
     balanceBefore = currency.balanceOf(strategist)
 
     status = cloned_strategy.lendStatuses()

@@ -36,7 +36,7 @@ def live_GenericDyDx_usdc_1(GenericDyDx):
 # change these fixtures for generic tests
 @pytest.fixture
 def currency(dai, usdc, weth):
-    yield usdc
+    yield weth
 
 
 @pytest.fixture(autouse=True)
@@ -63,7 +63,7 @@ def whale(accounts, web3, weth):
 @pytest.fixture()
 def strategist(accounts, whale, currency):
     decimals = currency.decimals()
-    currency.transfer(accounts[1], 100_000 * (10 ** decimals), {"from": whale})
+    currency.transfer(accounts[1], 10_000 * (10 ** decimals), {"from": whale})
     yield accounts[1]
 
 
@@ -136,6 +136,16 @@ def cdai(interface):
 def cUsdc(interface):
     yield interface.Comet("0xc3d688B66703497DAA19211EEdff47f25384cdc3")
 
+@pytest.fixture
+def cWeth(interface):
+    yield interface.Comet("0xA17581A9E3356d9A858b789D68B4d866e593aE94")
+
+@pytest.fixture
+def cToken(currency, usdc, cUsdc, cWeth):
+    if currency == usdc:
+        yield cUsdc
+    else:
+        yield cWeth
 
 @pytest.fixture
 def crUsdc(interface):
@@ -171,17 +181,25 @@ def strategy(
     rewards,
     keeper,
     vault,
-    cUsdc,
+    cToken,
     Strategy,
     GenericCompoundV3,
-    chain
+    weth
 ):
     strategy = strategist.deploy(Strategy, vault)
     strategy.setKeeper(keeper, {"from": gov})
     strategy.setWithdrawalThreshold(0, {"from": gov})
     strategy.setRewards(rewards, {"from": strategist})
 
-    compoundV3Plugin = strategist.deploy(GenericCompoundV3, strategy, "CompoundV3", cUsdc)
+    compoundV3Plugin = strategist.deploy(GenericCompoundV3, strategy, "CompoundV3", cToken)
+
+    if cToken.baseToken() == weth:
+        compoundV3Plugin.setPriceFeeds(
+            "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+            compoundV3Plugin.rewardTokenPriceFeed(),
+            {"from": gov}
+        )
+
     assert compoundV3Plugin.apr() > 0
 
     strategy.addLender(compoundV3Plugin, {"from": gov})

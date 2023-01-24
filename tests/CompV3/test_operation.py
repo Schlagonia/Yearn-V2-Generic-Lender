@@ -6,14 +6,14 @@ import brownie
 
 
 def test_good_migration(
-    usdc, Strategy, chain, whale, gov, strategist, rando, vault, strategy, fn_isolation
+    currency, Strategy, chain, whale, gov, strategist, rando, vault, strategy, fn_isolation
 ):
-    currency = usdc
+    currency = currency
 
-    usdc.approve(vault, 2 ** 256 - 1, {"from": whale})
-    usdc.approve(vault, 2 ** 256 - 1, {"from": strategist})
+    currency.approve(vault, 2 ** 256 - 1, {"from": whale})
+    currency.approve(vault, 2 ** 256 - 1, {"from": strategist})
 
-    deposit_limit = 1_000_000_000 * 1e6
+    deposit_limit = 1_000_000_000 * (10 ** currency.decimals())
     debt_ratio = 10_000
     vault.addStrategy(strategy, debt_ratio, 0, 2 ** 256 - 1, 500, {"from": gov})
     vault.setDepositLimit(deposit_limit, {"from": gov})
@@ -22,6 +22,7 @@ def test_good_migration(
     vault.deposit(amount1, {"from": whale})
 
     amount1 = 50 * 1e6
+    currency.transfer(strategist, amount1, {"from": whale})
     vault.deposit(amount1, {"from": strategist})
 
     strategy.harvest({"from": strategist})
@@ -54,9 +55,9 @@ def test_good_migration(
 
 
 def test_normal_activity(
-    usdc,
+    currency,
     Strategy,
-    cUsdc,
+    cToken,
     chain,
     whale,
     gov,
@@ -67,12 +68,13 @@ def test_normal_activity(
     fn_isolation,
     aUsdc,
 ):
-    starting_balance = usdc.balanceOf(strategist)
-    currency = usdc
+
+    starting_balance = currency.balanceOf(strategist)
+    currency = currency
     decimals = currency.decimals()
 
-    usdc.approve(vault, 2 ** 256 - 1, {"from": whale})
-    usdc.approve(vault, 2 ** 256 - 1, {"from": strategist})
+    currency.approve(vault, 2 ** 256 - 1, {"from": whale})
+    currency.approve(vault, 2 ** 256 - 1, {"from": strategist})
 
     deposit_limit = 1_000_000_000 * (10 ** (decimals))
     debt_ratio = 10_000
@@ -82,6 +84,9 @@ def test_normal_activity(
     assert deposit_limit == vault.depositLimit()
     # our humble strategist deposits some test funds
     depositAmount = 501 * (10 ** (decimals))
+    if starting_balance < depositAmount:
+        currency.transfer(strategist, depositAmount, {"from": whale})
+
     vault.deposit(depositAmount, {"from": strategist})
 
     assert strategy.estimatedTotalAssets() == 0
@@ -105,7 +110,7 @@ def test_normal_activity(
 
     for i in range(15):
         waitBlock = random.randint(10, 50)
-        cUsdc.accrueAccount(strategy.lenders(0), {"from": strategy.lenders(0)})
+        cToken.accrueAccount(strategy.lenders(0), {"from": strategy.lenders(0)})
         chain.sleep(15 * 30)
         chain.mine(waitBlock)
 
@@ -122,7 +127,7 @@ def test_normal_activity(
             shares = vault.balanceOf(whale)
             print("whale has:", shares)
             sharesout = int(shares * percent / 100)
-            expectedout = sharesout * (shareprice / 1e18) * (10 ** (decimals * 2))
+            expectedout = sharesout * shareprice / (10 ** (decimals))
 
             balanceBefore = currency.balanceOf(whale)
             vault.withdraw(sharesout, {"from": whale})
@@ -140,7 +145,7 @@ def test_normal_activity(
     shareprice = vault.pricePerShare()
 
     shares = vault.balanceOf(strategist)
-    expectedout = shares * (shareprice / 1e18) * (10 ** (decimals * 2))
+    expectedout = shares * shareprice / (10 ** (decimals))
     balanceBefore = currency.balanceOf(strategist)
 
     # genericStateOfStrat(strategy, currency, vault)
@@ -169,13 +174,13 @@ def test_normal_activity(
 
 
 def test_debt_increase(
-    usdc, Strategy, chain, whale, gov, strategist, rando, vault, strategy, fn_isolation
+    currency, Strategy, chain, whale, gov, strategist, rando, vault, strategy, fn_isolation
 ):
 
-    currency = usdc
-    usdc.approve(vault, 2 ** 256 - 1, {"from": whale})
+    currency = currency
+    currency.approve(vault, 2 ** 256 - 1, {"from": whale})
 
-    deposit_limit = 100_000_000 * 1e6
+    deposit_limit = 100_000_000 * (10 ** currency.decimals())
     debt_ratio = 10_000
     vault.addStrategy(strategy, debt_ratio, 0, 2 ** 256 - 1, 500, {"from": gov})
     vault.setDepositLimit(deposit_limit, {"from": gov})
@@ -224,7 +229,7 @@ def test_vault_shares(
     strategy,
     chain,
     vault,
-    cUsdc,
+    cToken,
     crUsdc,
     rewards,
     currency,
@@ -234,13 +239,15 @@ def test_vault_shares(
     strategist,
     fn_isolation,
 ):
-    deposit_limit = 100_000_000 * 1e6
+    deposit_limit = 100_000_000 * (10**currency.decimals())
     debt_ratio = 10_000
+    #currency = currency
     vault.addStrategy(strategy, debt_ratio, 0, 2 ** 256 - 1, 500, {"from": gov})
     vault.setDepositLimit(deposit_limit, {"from": gov})
     decimals = currency.decimals()
-    amount1 = 100_000 * (10 ** decimals)
+    amount1 = 1_000 * (10 ** decimals)
 
+    currency.transfer(strategist, amount1, {"from": whale})
     currency.approve(vault, 2 ** 256 - 1, {"from": whale})
     currency.approve(vault, 2 ** 256 - 1, {"from": strategist})
 
@@ -296,7 +303,7 @@ def test_vault_shares(
         / (10 ** decimals)
         < amount1 * 2 * 1.001
     )
-    cUsdc.accrueAccount(strategy.lenders(0), {"from": strategy.lenders(0)})
+    cToken.accrueAccount(strategy.lenders(0), {"from": strategy.lenders(0)})
     strategy.harvest({"from": strategist})
 
     chain.sleep(6 * 3600 + 1)  # pass protection period
@@ -334,7 +341,7 @@ def test_apr(
     strategy,
     chain,
     vault,
-    cUsdc,
+    cToken,
     rewards,
     currency,
     gov,
@@ -344,17 +351,19 @@ def test_apr(
     fn_isolation,
 ):
     decimals = currency.decimals()
-    deposit_limit = 100_000_000 * 1e6
+    deposit_limit = 100_000_000 * (10**decimals)
     debt_ratio = 10_000
     vault.addStrategy(strategy, debt_ratio, 0, 2 ** 256 - 1, 500, {"from": gov})
     vault.setDepositLimit(deposit_limit, {"from": gov})
     andre = whale
     gov = strategist
     amount1 = 50 * (10 ** decimals)
+    currency.transfer(gov, amount1, {"from": whale})
     currency.approve(vault, 2 ** 256 - 1, {"from": andre})
     currency.approve(vault, 2 ** 256 - 1, {"from": gov})
 
-    amount2 = 50_000 * (10 ** decimals)
+    amount2 = 5_000 * (10 ** decimals)
+    currency.transfer(andre, amount2, {"from": whale})
 
     vault.deposit(amount1, {"from": gov})
     vault.deposit(amount2, {"from": andre})
@@ -364,7 +373,7 @@ def test_apr(
     startingBalance = vault.totalAssets()
 
     for i in range(10):
-        cUsdc.accrueAccount(strategy.lenders(0), {"from": strategy.lenders(0)})
+        cToken.accrueAccount(strategy.lenders(0), {"from": strategy.lenders(0)})
         waitBlock = 25
         # print(f'\n----wait {waitBlock} blocks----')
         chain.mine(waitBlock)
