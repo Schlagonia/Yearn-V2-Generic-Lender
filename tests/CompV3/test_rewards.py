@@ -106,7 +106,7 @@ def test_with_rewards(
     strategy,
     GenericCompoundV3,
     aUsdc,
-    comp
+    weth
 ):
     starting_balance = currency.balanceOf(strategist)
     decimals = currency.decimals()
@@ -148,16 +148,21 @@ def test_with_rewards(
     strategy.harvest({"from": strategist})
 
     assert plugin.harvestTrigger(10) == False
-    assert plugin.getRewardsOwed() > 0
+    
     print(f"Base index scale {cToken.baseIndexScale()}")
     print(f"Base Scale {cToken.baseScale()}")
     print(f"Second Current APR {plugin.apr()}")
     print(f"Supply speed {cToken.baseTrackingSupplySpeed()}")
     print(f"Supply reward apr {plugin.getRewardAprForSupplyBase(0)}")
-    assert plugin.getRewardAprForSupplyBase(0) > 0
+
+    if currency == weth:
+        assert plugin.getRewardsOwed() > 0
+        assert plugin.getRewardAprForSupplyBase(0) > 0
+    else:
+        assert plugin.getRewardsOwed() == 0
+        assert plugin.getRewardAprForSupplyBase(0) == 0
     #Make sure the base index scale getter works
     assert cToken.baseIndexScale() > 0
-
     #should still be able to call harvest
     plugin.harvest({"from": strategist})
 

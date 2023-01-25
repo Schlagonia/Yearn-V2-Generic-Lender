@@ -56,7 +56,7 @@ contract GenericCompoundV3 is GenericLenderBase {
     address public rewardTokenPriceFeed;
     address public baseTokenPriceFeed;
 
-    uint internal scaler;
+    uint256 internal SCALER;
 
     uint256 public minCompToSell;
     uint256 public minRewardToHarvest;
@@ -81,9 +81,9 @@ contract GenericCompoundV3 is GenericLenderBase {
         
         uint BASE_MANTISSA = comet.baseScale();
         uint BASE_INDEX_SCALE = comet.baseIndexScale();
-        uint diff = BASE_INDEX_SCALE > BASE_MANTISSA ? BASE_INDEX_SCALE / BASE_MANTISSA : BASE_MANTISSA / BASE_INDEX_SCALE;
         // this is needed for reward apr calculations based on decimals of want
-        scaler = (10 ** vault.decimals()).mul(diff);
+        // we scale rewards per second to the base token decimals and diff between comp decimals and the index scale
+        SCALER = BASE_MANTISSA.mul(1e18 / BASE_INDEX_SCALE);
 
         want.safeApprove(_comet, type(uint256).max);
         IERC20(comp).safeApprove(address(router), type(uint256).max);
@@ -160,7 +160,7 @@ contract GenericCompoundV3 is GenericLenderBase {
     */
     function getRewardAprForSupplyBase(uint newAmount) public view returns (uint) {
         Comet _comet = comet;
-        uint rewardToSuppliersPerDay = _comet.baseTrackingSupplySpeed().mul(SECONDS_PER_DAY).mul(scaler);
+        uint rewardToSuppliersPerDay = _comet.baseTrackingSupplySpeed().mul(SECONDS_PER_DAY).mul(SCALER);
         if(rewardToSuppliersPerDay == 0) return 0;
 
         uint rewardTokenPriceInUsd = _comet.getPrice(rewardTokenPriceFeed);
