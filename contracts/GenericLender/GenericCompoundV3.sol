@@ -90,7 +90,7 @@ contract GenericCompoundV3 is GenericLenderBase {
 
         // default to the base token feed given
         baseTokenPriceFeed = comet.baseTokenPriceFeed();
-        // default to the compound feed
+        // default to the compound/USD feed
         rewardTokenPriceFeed = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
 
         minCompToSell = 0.05 ether;
