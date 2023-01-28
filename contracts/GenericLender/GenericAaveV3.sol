@@ -59,7 +59,7 @@ contract GenericAaveV3 is GenericLenderBase {
     using SafeMath for uint256;
 
     //Should be the same for all EVM chains
-    IProtocolDataProvider public constant protocolDataProvider = IProtocolDataProvider(address(0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654));
+    IProtocolDataProvider public constant protocolDataProvider = IProtocolDataProvider(0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3);
     IAToken public aToken;
     
     //Only Applicable for Mainnet, We leave then since they wont be called on any other chain

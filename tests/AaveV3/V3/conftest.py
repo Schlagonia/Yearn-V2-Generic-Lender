@@ -3,23 +3,23 @@ from brownie import Wei, config, Contract
 
 @pytest.fixture
 def wftm():
-    yield Contract("0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83")
+    yield Contract("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2")
 
 @pytest.fixture
 def aWftm():
-    yield "0x6d80113e533a2C0fe82EaBD35f1875DcEA89Ea97"
+    yield "0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8"
 
 @pytest.fixture
 def lendingPool():
-    yield '0x794a61358D6845594F94dc1DB02A252b5b4814aD'
+    yield '0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2'
 
 @pytest.fixture
 def router():
-    yield '0xF491e7B69E4244ad4002BC14e878a34207E38c29'
+    yield '0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F'
 
 @pytest.fixture
-def router2(accounts):
-    yield accounts[7]
+def router2():
+    yield "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
 
 @pytest.fixture
 def gov(accounts):
@@ -27,7 +27,7 @@ def gov(accounts):
 
 @pytest.fixture
 def whale(accounts):
-    yield accounts.at("0x431e81e5dfb5a24541b5ff8762bdef3f32f96354", force=True)
+    yield accounts.at("0xBA12222222228d8Ba445958a75a0704d566BF2C8", force=True)
 
 @pytest.fixture
 def rewards(gov):
@@ -55,7 +55,7 @@ def rando(accounts):
 @pytest.fixture
 def realVault(pm):
     Vault = pm(config["dependencies"][0]).Vault
-    realVault = Vault.at('0x0DEC85e74A92c52b7F708c4B10207D9560CEFaf0')
+    realVault = Vault.at('0xC1f3C276Bf73396C020E8354bcA581846171649d')
     yield realVault
 
 @pytest.fixture
@@ -69,7 +69,7 @@ def vault(gov, rewards, guardian, wftm, pm):
 
 @pytest.fixture
 def realStrategy(FtmStrategy):
-    realStrategy = FtmStrategy.at('0x695A4a6e5888934828Cb97A3a7ADbfc71A70922D')
+    realStrategy = FtmStrategy.at('0x23c7DB62d07425733a0F61B4b2039b27Fd3cD0B1')
     yield realStrategy
 
 @pytest.fixture
@@ -111,7 +111,7 @@ def v3Plugin(
     assert apr > 0
     print(apr/1e18)
     
-    apr2 = v3Plugin.aprAfterDeposit(500_000 * 1e18) # * 3154 * 10**4
+    apr2 = v3Plugin.aprAfterDeposit(5_000 * 1e18) # * 3154 * 10**4
     print(apr2/1e18)
     assert apr2 < apr
     yield v3Plugin
