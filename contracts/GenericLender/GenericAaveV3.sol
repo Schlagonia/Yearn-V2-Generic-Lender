@@ -521,6 +521,7 @@ contract GenericAaveV3 is GenericLenderBase {
         lp.supply(address(want), amount, address(this), referral);
     }
 
+    // function to check if the cooldown has ended and stkAave can be claimed
     function _checkCooldown() internal view returns (bool) {
         // only checks the cooldown if we are on mainnet eth
         uint256 id;
@@ -530,7 +531,7 @@ contract GenericAaveV3 is GenericLenderBase {
         if(id != 1) {
             return false;
         }
-        // wjem we started the last cooldown
+        // whem we started the last cooldown
         uint256 cooldownStartTimestamp = IStakedAave(stkAave).stakersCooldowns(address(this));
         // how long it needs to wait
         uint256 COOLDOWN_SECONDS = IStakedAave(stkAave).COOLDOWN_SECONDS();
@@ -539,7 +540,7 @@ contract GenericAaveV3 is GenericLenderBase {
 
         // if we have waited the full cooldown period
         if(block.timestamp >= cooldownStartTimestamp.add(COOLDOWN_SECONDS)) {
-            // only return true if the period hasnt expired
+            // only return true if the period hasnt expired and the cooldown was actually started
             return block.timestamp.sub(cooldownStartTimestamp.add(COOLDOWN_SECONDS)) <= UNSTAKE_WINDOW || cooldownStartTimestamp == 0;
         } else {
             return false;
