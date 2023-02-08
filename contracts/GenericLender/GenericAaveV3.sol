@@ -524,6 +524,8 @@ contract GenericAaveV3 is GenericLenderBase {
         }
         // whem we started the last cooldown
         uint256 cooldownStartTimestamp = IStakedAave(stkAave).stakersCooldowns(address(this));
+        // if we never started a cooldown there is nothing to redeem
+        if(cooldownStartTimestamp == 0) return false;
         // how long it needs to wait
         uint256 COOLDOWN_SECONDS = IStakedAave(stkAave).COOLDOWN_SECONDS();
         // the time period we have to claim once cooldown is over
@@ -531,8 +533,8 @@ contract GenericAaveV3 is GenericLenderBase {
 
         // if we have waited the full cooldown period
         if(block.timestamp >= cooldownStartTimestamp.add(COOLDOWN_SECONDS)) {
-            // only return true if the period hasnt expired and the cooldown was actually started
-            return block.timestamp.sub(cooldownStartTimestamp.add(COOLDOWN_SECONDS)) <= UNSTAKE_WINDOW || cooldownStartTimestamp == 0;
+            // only return true if the period hasnt expired
+            return block.timestamp.sub(cooldownStartTimestamp.add(COOLDOWN_SECONDS)) <= UNSTAKE_WINDOW;
         } else {
             return false;
         }
