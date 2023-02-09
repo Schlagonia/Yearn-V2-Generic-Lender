@@ -604,7 +604,7 @@ contract GenericAaveV3 is GenericLenderBase {
 
     modifier keepers() {
         require(
-            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
+            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == vault.management(),
             "!keepers"
         );
         _;
