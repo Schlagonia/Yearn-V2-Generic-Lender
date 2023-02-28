@@ -53,8 +53,8 @@ def test_logic(
     trigger = v3Plugin.harvestTrigger('100')
     assert trigger == False
 
-    with brownie.reverts():
-        v3Plugin.harvest({"from":gov})
+    # should be able to harvest even if not Incentivized
+    v3Plugin.harvest({"from":gov})
 
     a = v3Plugin.apr()
     n = v3Plugin.nav()

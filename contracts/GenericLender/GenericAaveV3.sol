@@ -16,6 +16,11 @@ import {IPool} from "../Interfaces/Aave/V3/IPool.sol";
 import {IProtocolDataProvider} from "../Interfaces/Aave/V3/IProtocolDataProvider.sol";
 import {IRewardsController} from "../Interfaces/Aave/V3/IRewardsController.sol";
 import {DataTypesV3} from "../Libraries/Aave/V3/DataTypesV3.sol";
+import {ITradeFactory} from "../Interfaces/ySwaps/ITradeFactory.sol";
+
+interface IBaseFee {
+    function isCurrentBaseFeeAcceptable() external view returns (bool);
+}
 
 //-- IReserveInterestRateStrategy implemented manually to avoid compiler errors for aprAfterDeposit function --//
 /**
@@ -53,19 +58,19 @@ contract GenericAaveV3 is GenericLenderBase {
     using Address for address;
     using SafeMath for uint256;
 
-    //Should be the same for all EVM chains
-    IProtocolDataProvider public constant protocolDataProvider = IProtocolDataProvider(address(0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654));
+    IProtocolDataProvider public constant protocolDataProvider = IProtocolDataProvider(0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3);
     IAToken public aToken;
     
-    //Only Applicable for Mainnet, We leave then since they wont be called on any other chain
+    // stkAave addresses only Applicable for Mainnet, We leave then since they wont be called on any other chain
     IStakedAave private constant stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
     address private constant AAVE = address(0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9);
 
     address public keep3r;
 
+    // to check if we should calculate reward apr
     bool public isIncentivised;
-    //Amount to multiply callcost by in harvestTrigger
-    uint256 public profitFactor;
+    //Amount to return true in harvestTrigger
+    uint256 public minRewardsToHarvest;
 
     // Used to assure we stop infinite while loops
     //Should never be more reward tokens than 5
@@ -79,10 +84,14 @@ contract GenericAaveV3 is GenericLenderBase {
     ***/
     //Wrapped native token for chain i.e. WETH
     address public WNATIVE;
+
+    // Uni V2 routers we use for rewards and apr calculations
     address public baseRouter;
     address public secondRouter;
     //Uni v2 router to be used
     IUniswapV2Router02 public router;
+
+    address public tradeFactory;
 
     uint256 constant internal SECONDS_IN_YEAR = 365 days;
 
@@ -133,11 +142,12 @@ contract GenericAaveV3 is GenericLenderBase {
 
         aToken = IAToken(_lendingPool().getReserveData(address(want)).aTokenAddress);
 
+        // if incentivised get the applicable rewards controller
         if(_isIncentivised) {
             address rewardController = address(aToken.getIncentivesController());
             require(rewardController != address(0), "!aToken does not have incentives controller set up");
+            isIncentivised = _isIncentivised;
         }
-        isIncentivised = _isIncentivised;
 
         IERC20(address(want)).safeApprove(address(_lendingPool()), type(uint256).max);
 
@@ -145,7 +155,7 @@ contract GenericAaveV3 is GenericLenderBase {
         WNATIVE = _wNative;
         baseRouter = _baseRouter;
         secondRouter = _secondRouter;
-        profitFactor = 100;
+        minRewardsToHarvest = 10e18;
         router = IUniswapV2Router02(_baseRouter);
     }
 
@@ -175,8 +185,8 @@ contract GenericAaveV3 is GenericLenderBase {
         keep3r = _keep3r;
     }
 
-    function setProfitFactor(uint256 _profitFactor) external management {
-        profitFactor = _profitFactor;
+    function setMinRewardsToHarvest(uint256 _minRewardsToHarvest) external management {
+        minRewardsToHarvest = _minRewardsToHarvest;
     }
 
     function deposit() external override management {
@@ -201,6 +211,7 @@ contract GenericAaveV3 is GenericLenderBase {
         return returned >= invested;
     }
 
+    // to be called by management if the trigger can not start a cooldown
     function startCooldown() external management {
         // for emergency cases
         IStakedAave(stkAave).cooldown(); // it will revert if balance of stkAave == 0
@@ -223,22 +234,28 @@ contract GenericAaveV3 is GenericLenderBase {
         return a.mul(_nav());
     }
 
-    // calculates APR from Liquidity Mining Program
+    // calculates APR from Liquidity Mining Program for a specific reward token
+    // kept public for debugging purposes
     function _incentivesRate(uint256 totalLiquidity, address rewardToken) public view returns (uint256) {
         // only returns != 0 if the incentives are in place at the moment.
         // Return 0 incase an improper address is sent so the whole tx doesnt fail
         if(rewardToken == address(0)) return 0;
 
+        // make sure we should be calculating the apr and that the distro period hasnt ended
         if(isIncentivised && block.timestamp < _incentivesController().getDistributionEnd(address(aToken), rewardToken)) {
             uint256 _emissionsPerSecond;
             (, _emissionsPerSecond, , ) = _incentivesController().getRewardsData(address(aToken), rewardToken);
             if(_emissionsPerSecond > 0) {
                 uint256 emissionsInWant;
+                // we need to get the market rate from the reward token to want
                 if(rewardToken == address(want)) {
+                    // no calculation needed if rewarded in want
                     emissionsInWant = _emissionsPerSecond;
                 } else if(rewardToken == address(stkAave)){
+                    // if the reward token is stkAave we will be selling Aave
                     emissionsInWant = _checkPrice(AAVE, address(want), _emissionsPerSecond);
                 } else {
+                    // else just check the price
                     emissionsInWant = _checkPrice(rewardToken, address(want), _emissionsPerSecond); // amount of emissions in want
                 }
 
@@ -261,8 +278,6 @@ contract GenericAaveV3 is GenericLenderBase {
 
         uint256 newLiquidity = availableLiquidity.add(extraAmount);
 
-        uint256 totalLiquidity = newLiquidity.add(unbacked).add(totalStableDebt).add(totalVariableDebt);
-
         (, , , , uint256 reserveFactor, , , , , ) = protocolDataProvider.getReserveConfigurationData(address(want));
 
         DataTypesV3.CalculateInterestRatesParams memory params = DataTypesV3.CalculateInterestRatesParams(
@@ -280,14 +295,16 @@ contract GenericAaveV3 is GenericLenderBase {
         (uint256 newLiquidityRate, , ) = IReserveInterestRateStrategy(reserveData.interestRateStrategyAddress).calculateInterestRates(params);
 
         uint256 incentivesRate = 0;
+        // if we want to calculate the reward apr
         if(isIncentivised) {
+            uint256 totalLiquidity = newLiquidity.add(unbacked).add(totalStableDebt).add(totalVariableDebt);
 
+            // get all of the current reward tokens
             address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
-            uint256 i = 0;
-            uint256 _maxLoops = maxLoops;
+            uint256 i;
             uint256 tokenIncentivesRate;
             //Passes the total Supply and the corresponding reward token address for each reward token the want has
-            while(i < rewardTokens.length && i < _maxLoops) {
+            while(i < rewardTokens.length && i < maxLoops) {
                 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
 
                 incentivesRate += tokenIncentivesRate;
@@ -303,13 +320,10 @@ contract GenericAaveV3 is GenericLenderBase {
         return aToken.balanceOf(address(this)) > dust || want.balanceOf(address(this)) > dust;
     }
 
-    // Only for incentivised aTokens
-    // this is a manual trigger to claim rewards
-    // only callable if the token is incentivised by Aave Governance
+    // this is a manual trigger to claim rewards and sell them if tradeFactory is not set
     function harvest() external keepers{
-        require(isIncentivised, "Not incevtivised, Nothing to harvest");
 
-        //Need to redeem and aave from StkAave if applicable before claiming rewards and staring cool down over
+        //Need to redeem any aave from StkAave first if applicable before claiming rewards and staring cool down over
         redeemAave();
 
         //claim all rewards
@@ -324,10 +338,12 @@ contract GenericAaveV3 is GenericLenderBase {
             token = rewardsList[i];
 
             if(token == address(stkAave)) {
+                // if reward token is stkAave we need to start the cooldown process
                 harvestStkAave();
             } else if(token == address(want)) {
                 continue;   
             } else {
+                // swap token if trade factory isnt set
                 _swapFrom(token, address(want), IERC20(token).balanceOf(address(this)));
             }
         }
@@ -340,12 +356,14 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function redeemAave() internal {
+        // can only redeem if the cooldown period if over
         if(!_checkCooldown()) {
             return;
         }
 
         uint256 stkAaveBalance = IERC20(address(stkAave)).balanceOf(address(this));
         if(stkAaveBalance > 0) {
+            // if we have a stkAave balance redeem it for AAVE
             stkAave.redeem(address(this), stkAaveBalance);
         }
 
@@ -362,10 +380,6 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function harvestTrigger(uint256 callcost) external view returns (bool) {
-        if(!isIncentivised) {
-            return false;
-        }
-
         address[] memory assets = new address[](1);
         assets[0] = address(aToken);
 
@@ -373,21 +387,36 @@ contract GenericAaveV3 is GenericLenderBase {
         (address[] memory tokens, uint256[] memory rewards) = 
             _incentivesController().getAllUserRewards(assets, address(this));
 
+        // we will add up all the rewards we are owed in terms of wnative
         uint256 expectedRewards = 0;
         // If we have a positive amount of any rewards return true
         for(uint256 i = 0; i < rewards.length; i ++) {
 
             address token = tokens[i];
             if(token == WNATIVE){
+                // if already in wnative we dont need to do anything
                 expectedRewards += rewards[i];
             } else if(token == address(stkAave)) {
-                expectedRewards += _checkPrice(AAVE, WNATIVE, rewards[i]);
+                // if stkAave is a reward token we should only be harvesting after the cooldown
+                if(!_checkCooldown()) return false;
+                // account for both pending and claimed stkAave
+                expectedRewards += _checkPrice(AAVE, WNATIVE, rewards[i] + IERC20(address(stkAave)).balanceOf(address(this)));
             } else {
                 expectedRewards += _checkPrice(token, WNATIVE, rewards[i]);
             }
         }
         
-        return expectedRewards >= callcost.mul(profitFactor);
+        // return true if rewards are over the amount and base fee is low enough
+        if(expectedRewards >= minRewardsToHarvest) {
+            return isBaseFeeAcceptable();
+        }
+    }
+
+    // check if the current baseFee is below our external target
+    function isBaseFeeAcceptable() internal view returns (bool) {
+        return
+            IBaseFee(0xb5e1CAcB567d98faaDB60a1fD4820720141f064F)
+                .isCurrentBaseFeeAcceptable();
     }
 
     function _nav() internal view returns (uint256) {
@@ -397,22 +426,23 @@ contract GenericAaveV3 is GenericLenderBase {
     function _apr() internal view returns (uint256) {
         uint256 liquidityRate = uint256(_lendingPool().getReserveData(address(want)).currentLiquidityRate).div(1e9);// dividing by 1e9 to pass from ray to wad
 
-        (uint256 unbacked, , , uint256 totalStableDebt, uint256 totalVariableDebt, , , , , , , ) =
-            protocolDataProvider.getReserveData(address(want));
-
-        uint256 availableLiquidity = want.balanceOf(address(aToken));
-
-        uint256 totalLiquidity = availableLiquidity.add(unbacked).add(totalStableDebt).add(totalVariableDebt);
-
-        uint256 incentivesRate = 0;
+        uint256 incentivesRate;
+        // only check rewads if the token is incentivised
         if(isIncentivised) {
+            (uint256 unbacked, , , uint256 totalStableDebt, uint256 totalVariableDebt, , , , , , , ) =
+                protocolDataProvider.getReserveData(address(want));
 
+            uint256 availableLiquidity = want.balanceOf(address(aToken));
+
+            // get the full amount of assets that are earning interest
+            uint256 totalLiquidity = availableLiquidity.add(unbacked).add(totalStableDebt).add(totalVariableDebt);
+
+            // get all the reward tokens being earned
             address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
-            uint256 i = 0;
-            uint256 _maxLoops = maxLoops;
+            uint256 i;
             uint256 tokenIncentivesRate;
             //Passes the total Supply and the corresponding reward token address for each reward token the want has
-            while(i < rewardTokens.length && i < _maxLoops) {
+            while(i < rewardTokens.length && i < maxLoops) {
            
                 tokenIncentivesRate = _incentivesRate(totalLiquidity, rewardTokens[i]); 
 
@@ -482,7 +512,9 @@ contract GenericAaveV3 is GenericLenderBase {
         lp.supply(address(want), amount, address(this), referral);
     }
 
+    // function to check if the cooldown has ended and stkAave can be claimed
     function _checkCooldown() internal view returns (bool) {
+        // only checks the cooldown if we are on mainnet eth
         uint256 id;
         assembly {
             id := chainid()
@@ -490,12 +522,19 @@ contract GenericAaveV3 is GenericLenderBase {
         if(id != 1) {
             return false;
         }
-
+        // whem we started the last cooldown
         uint256 cooldownStartTimestamp = IStakedAave(stkAave).stakersCooldowns(address(this));
+        // if we never started a cooldown there is nothing to redeem
+        if(cooldownStartTimestamp == 0) return false;
+        // how long it needs to wait
         uint256 COOLDOWN_SECONDS = IStakedAave(stkAave).COOLDOWN_SECONDS();
+        // the time period we have to claim once cooldown is over
         uint256 UNSTAKE_WINDOW = IStakedAave(stkAave).UNSTAKE_WINDOW();
+
+        // if we have waited the full cooldown period
         if(block.timestamp >= cooldownStartTimestamp.add(COOLDOWN_SECONDS)) {
-            return block.timestamp.sub(cooldownStartTimestamp.add(COOLDOWN_SECONDS)) <= UNSTAKE_WINDOW || cooldownStartTimestamp == 0;
+            // only return true if the period hasnt expired
+            return block.timestamp.sub(cooldownStartTimestamp.add(COOLDOWN_SECONDS)) <= UNSTAKE_WINDOW;
         } else {
             return false;
         }
@@ -516,7 +555,8 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function _swapFrom(address _from, address _to, uint256 _amountIn) internal{
-        if (_amountIn == 0) {
+        // dont swap if the tradeFactory is set
+        if (_amountIn == 0 || tradeFactory != address(0)) {
             return;
         }
 
@@ -552,11 +592,7 @@ contract GenericAaveV3 is GenericLenderBase {
     }
 
     function _incentivesController() internal view returns (IRewardsController) {
-        if(isIncentivised) {
-            return aToken.getIncentivesController();
-        } else {
-            return IRewardsController(0);
-        }
+        return aToken.getIncentivesController();
     }
 
     function protectedTokens() internal view override returns (address[] memory) {
@@ -568,9 +604,59 @@ contract GenericAaveV3 is GenericLenderBase {
 
     modifier keepers() {
         require(
-            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
+            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == vault.management(),
             "!keepers"
         );
         _;
+    }
+
+        // ---------------------- YSWAPS FUNCTIONS ----------------------
+    function setTradeFactory(address _tradeFactory) external onlyGovernance {
+        if (tradeFactory != address(0)) {
+            _removeTradeFactoryPermissions();
+        }
+
+        if(isIncentivised) {
+            address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
+            ITradeFactory tf = ITradeFactory(_tradeFactory);
+            for(uint256 i; i < rewardTokens.length; i ++) {
+                address token = rewardTokens[i];
+                if(token == address(stkAave)) {
+                    // if stkAave is the reward Aave is what the trade factory should be swapping
+                    IERC20(AAVE).safeApprove(_tradeFactory, type(uint256).max);
+
+                    tf.enable(AAVE, address(want));
+                } else if (token == address(want)) {
+                    continue;
+                } else {
+                    IERC20(token).safeApprove(_tradeFactory, type(uint256).max);
+
+                    tf.enable(token, address(want));
+                }
+            }
+        }
+        tradeFactory = _tradeFactory;
+    }
+
+    function removeTradeFactoryPermissions() external management {
+        _removeTradeFactoryPermissions();
+    }
+
+    function _removeTradeFactoryPermissions() internal {
+        if(isIncentivised) {
+            address[] memory rewardTokens = _incentivesController().getRewardsByAsset(address(aToken));
+            for(uint256 i; i < rewardTokens.length; i ++) {
+                address token = rewardTokens[i];
+                if(token == address(stkAave)) {
+                    // if stkAave is the reward Aave is what the trade factory should be swapping
+                    IERC20(AAVE).safeApprove(tradeFactory, 0);
+                    ITradeFactory(tradeFactory).disable(AAVE, address(want));
+                } else {
+                    IERC20(token).safeApprove(tradeFactory, 0);
+                    ITradeFactory(tradeFactory).disable(token, address(want));
+                }
+            }
+        }
+        tradeFactory = address(0);
     }
 }
