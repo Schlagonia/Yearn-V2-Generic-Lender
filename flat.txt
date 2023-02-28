@@ -140,11 +140,6 @@ library Address {
     }
 }
 
-// File: IAsset.sol
-
-interface IAsset {
-    // solhint-disable-previous-line no-empty-blocks
-}
 // File: IERC20.sol
 
 /**
@@ -251,77 +246,6 @@ interface IGenericLender {
     function sweep(address _token) external;
 }
 
-// File: IStakingRewards.sol
-
-interface IStakingRewards {
-    function totalSupply() external view returns (uint256);
-
-    function balanceOf(address account) external view returns (uint256);
-
-    function lastTimeRewardApplicable(address _rewardsToken)
-        external
-        view
-        returns (uint256);
-
-    function rewardPerToken(address _rewardsToken)
-        external
-        view
-        returns (uint256);
-
-    function earned(address _rewardsToken, address account)
-        external
-        view
-        returns (uint256);
-
-    function getRewardRate(address _rewardsToken)
-        external
-        view
-        returns (uint256);
-
-    function getRewardForDuration(address _rewardsToken)
-        external
-        view
-        returns (uint256);
-
-    function getRewardsTokenCount() external view returns (uint256);
-
-    function getAllRewardsTokens() external view returns (address[] memory);
-
-    function getStakingToken() external view returns (address);
-
-    function stake(uint256 amount) external;
-
-    function stakeFor(address account, uint256 amount) external;
-
-    function withdraw(uint256 amount) external;
-
-    function withdrawFor(address account, uint256 amount) external;
-
-    function getReward() external;
-
-    function getRewardFor(address account) external;
-
-    function exit() external;
-
-    function periodFinish() external view returns(uint256);
-}
-// File: IStakingRewardsFactory.sol
-
-interface IStakingRewardsFactory {
-    function getStakingRewardsCount() external view returns (uint256);
-
-    function getAllStakingRewards() external view returns (address[] memory);
-
-    function getStakingRewards(address stakingToken)
-        external
-        view
-        returns (address);
-
-    function getStakingToken(address underlying)
-        external
-        view
-        returns (address);
-}
 // File: ITradeFactory.sol
 
 // Feel free to change the license, but this is what we use
@@ -330,68 +254,26 @@ interface ITradeFactory {
     function enable(address, address) external;
     function disable(address, address) external;
 }
-// File: InterestRateModel.sol
+// File: IUniswapV3SwapCallback.sol
 
-interface InterestRateModel {
-    /**
-     * @notice Calculates the current borrow interest rate per block
-     * @param cash The total amount of cash the market has
-     * @param borrows The total amount of borrows the market has outstanding
-     * @param reserves The total amount of reserves the market has
-     * @return The borrow rate per block (as a percentage, and scaled by 1e18)
-     */
-    function getBorrowRate(
-        uint256 cash,
-        uint256 borrows,
-        uint256 reserves
-    ) external view returns (uint256, uint256);
-
-    /**
-     * @notice Calculates the current supply interest rate per block
-     * @param cash The total amount of cash the market has
-     * @param borrows The total amount of borrows the market has outstanding
-     * @param reserves The total amount of reserves the market has
-     * @param reserveFactorMantissa The current reserve factor the market has
-     * @return The supply rate per block (as a percentage, and scaled by 1e18)
-     */
-    function getSupplyRate(
-        uint256 cash,
-        uint256 borrows,
-        uint256 reserves,
-        uint256 reserveFactorMantissa
-    ) external view returns (uint256);
+/// @title Callback for IUniswapV3PoolActions#swap
+/// @notice Any contract that calls IUniswapV3PoolActions#swap must implement this interface
+interface IUniswapV3SwapCallback {
+    /// @notice Called to `msg.sender` after executing a swap via IUniswapV3Pool#swap.
+    /// @dev In the implementation you must pay the pool tokens owed for the swap.
+    /// The caller of this method must be checked to be a UniswapV3Pool deployed by the canonical UniswapV3Factory.
+    /// amount0Delta and amount1Delta can both be 0 if no tokens were swapped.
+    /// @param amount0Delta The amount of token0 that was sent (negative) or must be received (positive) by the pool by
+    /// the end of the swap. If positive, the callback must send that amount of token0 to the pool.
+    /// @param amount1Delta The amount of token1 that was sent (negative) or must be received (positive) by the pool by
+    /// the end of the swap. If positive, the callback must send that amount of token1 to the pool.
+    /// @param data Any data passed through by the caller via the IUniswapV3PoolActions#swap call
+    function uniswapV3SwapCallback(
+        int256 amount0Delta,
+        int256 amount1Delta,
+        bytes calldata data
+    ) external;
 }
-
-// File: Math.sol
-
-/**
- * @dev Standard math utilities missing in the Solidity language.
- */
-library Math {
-    /**
-     * @dev Returns the largest of two numbers.
-     */
-    function max(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a >= b ? a : b;
-    }
-
-    /**
-     * @dev Returns the smallest of two numbers.
-     */
-    function min(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a < b ? a : b;
-    }
-
-    /**
-     * @dev Returns the average of two numbers. The result is rounded towards
-     * zero.
-     */
-    function average(uint256 a, uint256 b) internal pure returns (uint256) {
-        // (a + b) / 2 can overflow, so we distribute
-        return (a / 2) + (b / 2) + ((a % 2 + b % 2) / 2);
-    }
-}
-
 // File: SafeMath.sol
 
 /**
@@ -550,321 +432,186 @@ library SafeMath {
     }
 }
 
-// File: CTokenI.sol
+// File: CompoundV3.sol
 
-interface CTokenI {
-    /*** Market Events ***/
+library CometStructs {
+  struct AssetInfo {
+    uint8 offset;
+    address asset;
+    address priceFeed;
+    uint64 scale;
+    uint64 borrowCollateralFactor;
+    uint64 liquidateCollateralFactor;
+    uint64 liquidationFactor;
+    uint128 supplyCap;
+  }
 
-    /**
-     * @notice Event emitted when interest is accrued
-     */
-    event AccrueInterest(uint256 cashPrior, uint256 interestAccumulated, uint256 borrowIndex, uint256 totalBorrows);
+  struct UserBasic {
+    int104 principal;
+    uint64 baseTrackingIndex;
+    uint64 baseTrackingAccrued;
+    uint16 assetsIn;
+    uint8 _reserved;
+  }
 
-    /**
-     * @notice Event emitted when tokens are minted
-     */
-    event Mint(address minter, uint256 mintAmount, uint256 mintTokens);
+  struct TotalsBasic {
+    uint64 baseSupplyIndex;
+    uint64 baseBorrowIndex;
+    uint64 trackingSupplyIndex;
+    uint64 trackingBorrowIndex;
+    uint104 totalSupplyBase;
+    uint104 totalBorrowBase;
+    uint40 lastAccrualTime;
+    uint8 pauseFlags;
+  }
 
-    /**
-     * @notice Event emitted when tokens are redeemed
-     */
-    event Redeem(address redeemer, uint256 redeemAmount, uint256 redeemTokens);
+  struct UserCollateral {
+    uint128 balance;
+    uint128 _reserved;
+  }
 
-    /**
-     * @notice Event emitted when underlying is borrowed
-     */
-    event Borrow(address borrower, uint256 borrowAmount, uint256 accountBorrows, uint256 totalBorrows);
+  struct RewardOwed {
+    address token;
+    uint owed;
+  }
 
-    /**
-     * @notice Event emitted when a borrow is repaid
-     */
-    event RepayBorrow(address payer, address borrower, uint256 repayAmount, uint256 accountBorrows, uint256 totalBorrows);
+  struct TotalsCollateral {
+    uint128 totalSupplyAsset;
+    uint128 _reserved;
+  }
 
-    /**
-     * @notice Event emitted when a borrow is liquidated
-     */
-    event LiquidateBorrow(address liquidator, address borrower, uint256 repayAmount, address cTokenCollateral, uint256 seizeTokens);
-
-    /*** Admin Events ***/
-
-    /**
-     * @notice Event emitted when pendingAdmin is changed
-     */
-    event NewPendingAdmin(address oldPendingAdmin, address newPendingAdmin);
-
-    /**
-     * @notice Event emitted when pendingAdmin is accepted, which means admin is updated
-     */
-    event NewAdmin(address oldAdmin, address newAdmin);
-
-    /**
-     * @notice Event emitted when the reserve factor is changed
-     */
-    event NewReserveFactor(uint256 oldReserveFactorMantissa, uint256 newReserveFactorMantissa);
-
-    /**
-     * @notice Event emitted when the reserves are added
-     */
-    event ReservesAdded(address benefactor, uint256 addAmount, uint256 newTotalReserves);
-
-    /**
-     * @notice Event emitted when the reserves are reduced
-     */
-    event ReservesReduced(address admin, uint256 reduceAmount, uint256 newTotalReserves);
-
-    /**
-     * @notice EIP20 Transfer event
-     */
-    event Transfer(address indexed from, address indexed to, uint256 amount);
-
-    /**
-     * @notice EIP20 Approval event
-     */
-    event Approval(address indexed owner, address indexed spender, uint256 amount);
-
-    /**
-     * @notice Failure event
-     */
-    event Failure(uint256 error, uint256 info, uint256 detail);
-
-    function transfer(address dst, uint256 amount) external returns (bool);
-
-    function transferFrom(
-        address src,
-        address dst,
-        uint256 amount
-    ) external returns (bool);
-
-    function approve(address spender, uint256 amount) external returns (bool);
-
-    function allowance(address owner, address spender) external view returns (uint256);
-
-    function balanceOf(address owner) external view returns (uint256);
-
-    function balanceOfUnderlying(address owner) external returns (uint256);
-
-    function getAccountSnapshot(address account)
-        external
-        view
-        returns (
-            uint256,
-            uint256,
-            uint256,
-            uint256
-        );
-
-    function borrowRatePerBlock() external view returns (uint256);
-
-    function supplyRatePerBlock() external view returns (uint256);
-
-    function totalBorrowsCurrent() external returns (uint256);
-
-    function borrowBalanceCurrent(address account) external returns (uint256);
-
-    function borrowBalanceStored(address account) external view returns (uint256);
-
-    function exchangeRateCurrent() external returns (uint256);
-
-    function accrualBlockNumber() external view returns (uint256);
-
-    function exchangeRateStored() external view returns (uint256);
-
-    function getCash() external view returns (uint256);
-
-    function accrueInterest() external returns (uint256);
-
-    function interestRateModel() external view returns (InterestRateModel);
-
-    function totalReserves() external view returns (uint256);
-
-    function reserveFactorMantissa() external view returns (uint256);
-
-    function seize(
-        address liquidator,
-        address borrower,
-        uint256 seizeTokens
-    ) external returns (uint256);
-
-    function totalBorrows() external view returns (uint256);
-
-    function totalSupply() external view returns (uint256);
+  struct RewardConfig {
+    address token;
+    uint64 rescaleFactor;
+    bool shouldUpscale;
+  }
 }
 
-// File: IBalancerVault.sol
+interface Comet is IERC20 {
+  function baseScale() external view returns (uint);
+  function supply(address asset, uint amount) external;
+  function withdraw(address asset, uint amount) external;
 
-interface IBalancerVault {
-    enum PoolSpecialization {GENERAL, MINIMAL_SWAP_INFO, TWO_TOKEN}
-    enum JoinKind {INIT, EXACT_TOKENS_IN_FOR_BPT_OUT, TOKEN_IN_FOR_EXACT_BPT_OUT, ALL_TOKENS_IN_FOR_EXACT_BPT_OUT}
-    enum ExitKind {EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, EXACT_BPT_IN_FOR_TOKENS_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT}
-    enum SwapKind {GIVEN_IN, GIVEN_OUT}
+  function getSupplyRate(uint utilization) external view returns (uint);
+  function getBorrowRate(uint utilization) external view returns (uint);
 
-    /**
-     * @dev Data for each individual swap executed by `batchSwap`. The asset in and out fields are indexes into the
-     * `assets` array passed to that function, and ETH assets are converted to WETH.
-     *
-     * If `amount` is zero, the multihop mechanism is used to determine the actual amount based on the amount in/out
-     * from the previous swap, depending on the swap kind.
-     *
-     * The `userData` field is ignored by the Vault, but forwarded to the Pool in the `onSwap` hook, and may be
-     * used to extend swap behavior.
-     */
-    struct BatchSwapStep {
-        bytes32 poolId;
-        uint256 assetInIndex;
-        uint256 assetOutIndex;
-        uint256 amount;
-        bytes userData;
-    }
-    /**
-     * @dev All tokens in a swap are either sent from the `sender` account to the Vault, or from the Vault to the
-     * `recipient` account.
-     *
-     * If the caller is not `sender`, it must be an authorized relayer for them.
-     *
-     * If `fromInternalBalance` is true, the `sender`'s Internal Balance will be preferred, performing an ERC20
-     * transfer for the difference between the requested amount and the User's Internal Balance (if any). The `sender`
-     * must have allowed the Vault to use their tokens via `IERC20.approve()`. This matches the behavior of
-     * `joinPool`.
-     *
-     * If `toInternalBalance` is true, tokens will be deposited to `recipient`'s internal balance instead of
-     * transferred. This matches the behavior of `exitPool`.
-     *
-     * Note that ETH cannot be deposited to or withdrawn from Internal Balance: attempting to do so will trigger a
-     * revert.
-     */
-    struct FundManagement {
-        address sender;
-        bool fromInternalBalance;
-        address payable recipient;
-        bool toInternalBalance;
-    }
+  function getAssetInfoByAddress(address asset) external view returns (CometStructs.AssetInfo memory);
+  function getAssetInfo(uint8 i) external view returns (CometStructs.AssetInfo memory);
 
-    /**
-     * @dev Data for a single swap executed by `swap`. `amount` is either `amountIn` or `amountOut` depending on
-     * the `kind` value.
-     *
-     * `assetIn` and `assetOut` are either token addresses, or the IAsset sentinel value for ETH (the zero address).
-     * Note that Pools never interact with ETH directly: it will be wrapped to or unwrapped from WETH by the Vault.
-     *
-     * The `userData` field is ignored by the Vault, but forwarded to the Pool in the `onSwap` hook, and may be
-     * used to extend swap behavior.
-     */
-    struct SingleSwap {
-        bytes32 poolId;
-        SwapKind kind;
-        IAsset assetIn;
-        IAsset assetOut;
-        uint256 amount;
-        bytes userData;
+  function getPrice(address priceFeed) external view returns (uint128);
+
+  function userBasic(address) external view returns (CometStructs.UserBasic memory);
+  function totalsBasic() external view returns (CometStructs.TotalsBasic memory);
+  function userCollateral(address, address) external view returns (CometStructs.UserCollateral memory);
+
+  function baseTokenPriceFeed() external view returns (address);
+
+  function numAssets() external view returns (uint8);
+
+  function getUtilization() external view returns (uint);
+
+  function baseTrackingSupplySpeed() external view returns (uint);
+  function baseTrackingBorrowSpeed() external view returns (uint);
+
+  function totalSupply() override external view returns (uint256);
+  function totalBorrow() external view returns (uint256);
+
+  function baseIndexScale() external pure returns (uint64);
+  function baseTrackingAccrued(address account) external view returns (uint64);
+
+  function totalsCollateral(address asset) external view returns (CometStructs.TotalsCollateral memory);
+
+  function baseMinForRewards() external view returns (uint256);
+  function baseToken() external view returns (address);
+
+  function accrueAccount(address account) external;
+}
+
+interface CometRewards {
+  function getRewardOwed(address comet, address account) external returns (CometStructs.RewardOwed memory);
+  function claim(address comet, address src, bool shouldAccrue) external;
+  
+  function rewardsClaimed(address comet, address account) external view returns(uint256);
+  function rewardConfig(address comet) external view returns (CometStructs.RewardConfig memory);
+}
+// File: ISwapRouter.sol
+
+/// @title Router token swapping functionality
+/// @notice Functions for swapping tokens via Uniswap V3
+interface ISwapRouter is IUniswapV3SwapCallback {
+    struct ExactInputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint24 fee;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+        uint160 sqrtPriceLimitX96;
     }
 
-    // enconding formats https://github.com/balancer-labs/balancer-v2-monorepo/blob/master/pkg/balancer-js/src/pool-weighted/encoder.ts
-    struct JoinPoolRequest {
-        IAsset[] assets;
-        uint256[] maxAmountsIn;
-        bytes userData;
-        bool fromInternalBalance;
+    /// @notice Swaps `amountIn` of one token for as much as possible of another token
+    /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in calldata
+    /// @return amountOut The amount of the received token
+    function exactInputSingle(ExactInputSingleParams calldata params)
+        external
+        payable
+        returns (uint256 amountOut);
+
+    struct ExactInputParams {
+        bytes path;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
     }
 
-    struct ExitPoolRequest {
-        IAsset[] assets;
-        uint256[] minAmountsOut;
-        bytes userData;
-        bool toInternalBalance;
+    /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path
+    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in calldata
+    /// @return amountOut The amount of the received token
+    function exactInput(ExactInputParams calldata params)
+        external
+        payable
+        returns (uint256 amountOut);
+
+    struct ExactOutputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint24 fee;
+        address recipient;
+        uint256 deadline;
+        uint256 amountOut;
+        uint256 amountInMaximum;
+        uint160 sqrtPriceLimitX96;
     }
 
-    function joinPool(
-        bytes32 poolId,
-        address sender,
-        address recipient,
-        JoinPoolRequest memory request
-    ) external payable;
+    /// @notice Swaps as little as possible of one token for `amountOut` of another token
+    /// @param params The parameters necessary for the swap, encoded as `ExactOutputSingleParams` in calldata
+    /// @return amountIn The amount of the input token
+    function exactOutputSingle(ExactOutputSingleParams calldata params)
+        external
+        payable
+        returns (uint256 amountIn);
 
-    function exitPool(
-        bytes32 poolId,
-        address sender,
-        address payable recipient,
-        ExitPoolRequest calldata request
-    ) external;
+    struct ExactOutputParams {
+        bytes path;
+        address recipient;
+        uint256 deadline;
+        uint256 amountOut;
+        uint256 amountInMaximum;
+    }
 
-    function getPool(bytes32 poolId) external view returns (address poolAddress, PoolSpecialization);
+    /// @notice Swaps as little as possible of one token for `amountOut` of another along the specified path (reversed)
+    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactOutputParams` in calldata
+    /// @return amountIn The amount of the input token
+    function exactOutput(ExactOutputParams calldata params)
+        external
+        payable
+        returns (uint256 amountIn);
 
-    function getPoolTokenInfo(bytes32 poolId, IERC20 token) external view returns (
-        uint256 cash,
-        uint256 managed,
-        uint256 lastChangeBlock,
-        address assetManager
-    );
-
-    function getPoolTokens(bytes32 poolId) external view returns (
-        IERC20[] calldata tokens,
-        uint256[] calldata balances,
-        uint256 lastChangeBlock
-    );
-    /**
-     * @dev Performs a swap with a single Pool.
-     *
-     * If the swap is 'given in' (the number of tokens to send to the Pool is known), it returns the amount of tokens
-     * taken from the Pool, which must be greater than or equal to `limit`.
-     *
-     * If the swap is 'given out' (the number of tokens to take from the Pool is known), it returns the amount of tokens
-     * sent to the Pool, which must be less than or equal to `limit`.
-     *
-     * Internal Balance usage and the recipient are determined by the `funds` struct.
-     *
-     * Emits a `Swap` event.
-     */
-    function swap(
-        SingleSwap memory singleSwap,
-        FundManagement memory funds,
-        uint256 limit,
-        uint256 deadline
-    ) external returns (uint256 amountCalculated);
-
-    /**
-     * @dev Performs a series of swaps with one or multiple Pools. In each individual swap, the caller determines either
-     * the amount of tokens sent to or received from the Pool, depending on the `kind` value.
-     *
-     * Returns an array with the net Vault asset balance deltas. Positive amounts represent tokens (or ETH) sent to the
-     * Vault, and negative amounts represent tokens (or ETH) sent by the Vault. Each delta corresponds to the asset at
-     * the same index in the `assets` array.
-     *
-     * Swaps are executed sequentially, in the order specified by the `swaps` array. Each array element describes a
-     * Pool, the token to be sent to this Pool, the token to receive from it, and an amount that is either `amountIn` or
-     * `amountOut` depending on the swap kind.
-     *
-     * Multihop swaps can be executed by passing an `amount` value of zero for a swap. This will cause the amount in/out
-     * of the previous swap to be used as the amount in for the current one. In a 'given in' swap, 'tokenIn' must equal
-     * the previous swap's `tokenOut`. For a 'given out' swap, `tokenOut` must equal the previous swap's `tokenIn`.
-     *
-     * The `assets` array contains the addresses of all assets involved in the swaps. These are either token addresses,
-     * or the IAsset sentinel value for ETH (the zero address). Each entry in the `swaps` array specifies tokens in and
-     * out by referencing an index in `assets`. Note that Pools never interact with ETH directly: it will be wrapped to
-     * or unwrapped from WETH by the Vault.
-     *
-     * Internal Balance usage, sender, and recipient are determined by the `funds` struct. The `limits` array specifies
-     * the minimum or maximum amount of each token the vault is allowed to transfer.
-     *
-     * `batchSwap` can be used to make a single swap, like `swap` does, but doing so requires more gas than the
-     * equivalent `swap` call.
-     *
-     * Emits `Swap` events.
-     */
-    function batchSwap(
-        SwapKind kind,
-        BatchSwapStep[] memory swaps,
-        IAsset[] memory assets,
-        FundManagement memory funds,
-        int256[] memory limits,
-        uint256 deadline
-    ) external payable returns (int256[] memory);
-
-    function queryBatchSwap(
-        SwapKind kind, 
-        BatchSwapStep[] memory swaps, 
-        IAsset[] memory assets, 
-        FundManagement memory funds
-    ) external view returns (int256[] memory assetDeltas);
+    // Taken from https://soliditydeveloper.com/uniswap3
+    // Manually added to the interface
+    function refundETH() external payable;
 }
 // File: SafeERC20.sol
 
@@ -1878,30 +1625,6 @@ abstract contract BaseStrategyInitializable is BaseStrategy {
     }
 }
 
-// File: CErc20I.sol
-
-interface CErc20I is CTokenI {
-    function mint(uint256 mintAmount) external returns (uint256);
-
-    function redeem(uint256 redeemTokens) external returns (uint256);
-
-    function redeemUnderlying(uint256 redeemAmount) external returns (uint256);
-
-    function borrow(uint256 borrowAmount) external returns (uint256);
-
-    function repayBorrow(uint256 repayAmount) external returns (uint256);
-
-    function repayBorrowBehalf(address borrower, uint256 repayAmount) external returns (uint256);
-
-    function liquidateBorrow(
-        address borrower,
-        uint256 repayAmount,
-        CTokenI cTokenCollateral
-    ) external returns (uint256);
-
-    function underlying() external view returns (address);
-}
-
 // File: GenericLenderBase.sol
 
 interface IBaseStrategy {
@@ -2000,187 +1723,133 @@ abstract contract GenericLenderBase is IGenericLender {
     }
 }
 
-// File: GenericIronBank.sol
+// File: GenericCompoundV3.sol
 
 /********************
- *   A lender plugin for LenderYieldOptimiser for any erc20 asset on IronBank (not eth)
+ *   A lender plugin for LenderYieldOptimiser for any base token erc20 asset on compoundV3
  *   Made by @Schlagonia
- *   https://github.com/Schlagonia/Yearn-V2-Generic-Lender/blob/main/contracts/GenericLender/GenericIronBank.sol
+ *   https://github.com/Schlagonia/Yearn-V2-Generic-Lender/blob/main/contracts/GenericLender/GenericCompoundV3.sol
  *
  ********************* */
 
-interface IVeledrome {
-    struct route {
-        address from;
-        address to;
-        bool stable;
-    }
-    
-    function swapExactTokensForTokens(
-        uint amountIn,
-        uint amountOutMin,
-        route[] calldata routes,
-        address to,
-        uint deadline
-    ) external returns (uint256[] memory amounts);
+interface IBaseFee {
+    function isCurrentBaseFeeAcceptable() external view returns (bool);
+}
 
-    function getAmountsOut(uint amountIn, route[] memory routes) external view returns (uint256[] memory amounts);
-} 
-
-contract GenericIronBank is GenericLenderBase {
+contract GenericCompoundV3 is GenericLenderBase {
     using Address for address;
     using SafeMath for uint256;
 
-    //Seconds per year for calculations
-    uint256 internal constant blocksPerYear = 3154 * 10**4;
-    //Reward token
-    address internal constant ib = 
-        0x00a35FD824c717879BF370E70AC6868b95870Dfb;
-    
-    //Contracts for staking i tokens
-    IStakingRewards public stakingRewards;
-    IStakingRewardsFactory public constant rewardsFactory =
-        IStakingRewardsFactory(0x35F70CE60f049A8c21721C53a1dFCcB5bF4a1Ea8);
+    //For apr calculations
+    uint internal constant DAYS_PER_YEAR = 365;
+    uint internal constant SECONDS_PER_DAY = 60 * 60 * 24;
+    uint internal constant SECONDS_PER_YEAR = 365 days;
 
-    /*** 
-        Rewards token stuff
-    ***/
-    //Wrapped native token for chain i.e. WETH
-    address internal constant WNATIVE =
-        0x4200000000000000000000000000000000000006;
-    //USDC for the middle of swaps
-    address internal constant usdc = 
-        0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
-    //Asset to use for swap as the middle
-    address public middleSwapToken;
-    //stable bool should be true if we are using usdc as the middle token and want is a stable coin
-    bool public stable;
-    ///For Optimism we will only be using the Veledrome router \\\\
-    IVeledrome public constant router =
-        IVeledrome(0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9);
-    //Balancer Variables for swapping
-    IBalancerVault internal constant balancerVault =
-        IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
-    bytes32 public constant ibEthPoolId = 
-        bytes32(0xefb0d9f51efd52d7589a9083a6d0ca4de416c24900020000000000000000002c);
-
-    address public keep3r;
+    //Rewards stuff
+    //Uniswap v3 router
+    ISwapRouter internal constant router =
+        ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+    //Fees for the V3 pools if the supply is incentivized
+    uint24 public compToEthFee;
+    uint24 public ethToWantFee;
+    address internal constant comp = 
+        0xc00e94Cb662C3520282E6f5717214004A7f26888;
+    address internal constant weth = 
+        0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address public tradeFactory;
-    bool public ignorePrinting;
 
-    uint256 public dustThreshold;
-    uint256 public minIbToSell;
+    Comet public comet;
+    CometRewards public constant rewardsContract = 
+        CometRewards(0x1B0e765F6224C21223AeA2af16c1C46E38885a40); 
+
+    // price feeds for the reward apr calculation, can be updated manually if needed
+    address public rewardTokenPriceFeed;
+    address public baseTokenPriceFeed;
+
+    uint256 internal SCALER;
+
+    uint256 public minCompToSell;
     uint256 public minRewardToHarvest;
-
-    CErc20I public cToken;
+    address public keep3r;
 
     constructor(
         address _strategy,
-        string memory name
+        string memory name,
+        address _comet
     ) public GenericLenderBase(_strategy, name) {
-        _initialize();
+        _initialize(_comet);
     }
 
-    function initialize() external {
-        _initialize();
+    function initialize(address _comet) external {
+        _initialize(_comet);
     }
 
-    function _initialize() internal {
-        require(address(cToken) == address(0), "GenericIB already initialized");
-        cToken = CErc20I(rewardsFactory.getStakingToken(address(want)));
-        require(cToken.underlying() == address(want), "WRONG CTOKEN");
+    function _initialize(address _comet) internal {
+        require(address(comet) == address(0), "already initialized");
+        comet = Comet(_comet);
+        require(comet.baseToken() == address(want), "wrong token");
+        
+        uint BASE_MANTISSA = comet.baseScale();
+        uint BASE_INDEX_SCALE = comet.baseIndexScale();
+        // this is needed for reward apr calculations based on decimals of want
+        // we scale rewards per second to the base token decimals and diff between comp decimals and the index scale
+        SCALER = BASE_MANTISSA.mul(1e18).div(BASE_INDEX_SCALE);
 
-        address _stakingRewards = rewardsFactory.getStakingRewards(address(cToken));
-        if(_stakingRewards != address(0)) {
-            cToken.approve(_stakingRewards, type(uint256).max);
-            stakingRewards = IStakingRewards(_stakingRewards);
-        }
+        want.safeApprove(_comet, type(uint256).max);
+        IERC20(comp).safeApprove(address(router), type(uint256).max);
 
-        want.safeApprove(address(cToken), type(uint256).max);
+        // default to the base token feed given
+        baseTokenPriceFeed = comet.baseTokenPriceFeed();
+        // default to the compound/USD feed
+        rewardTokenPriceFeed = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
 
-        //default to usdc
-        middleSwapToken = usdc;
-        //default to ignore printing due to lack of IB liquidity
-        ignorePrinting = true;
-        dustThreshold = 100; //depends on want
-        minRewardToHarvest = 1e18;
+        minCompToSell = 0.05 ether;
+        minRewardToHarvest = 10 ether;
     }
 
-    function cloneIronBankLender(
+    function cloneCompoundV3Lender(
         address _strategy,
-        string memory _name
+        string memory _name,
+        address _comet
     ) external returns (address newLender) {
         newLender = _clone(_strategy, _name);
-        GenericIronBank(newLender).initialize();
+        GenericCompoundV3(newLender).initialize(_comet);
     }
 
-    function nav() external view override returns (uint256) {
-        return _nav();
-    }
-
-    //adjust dust threshol
-    function setDustThreshold(uint256 amount) external management {
-        dustThreshold = amount;
-    }
-
-    //Can update the staking rewards contract, May start as 0 if not rewarded then changes later
-    function setStakingRewards() external management {
-        address _stakingRewards = rewardsFactory.getStakingRewards(address(cToken));
-        if(_stakingRewards != address(0)){
-            cToken.approve(address(stakingRewards), 0);
-            cToken.approve(_stakingRewards, type(uint256).max);
-            //make sure ignorePrinting == true
-            ignorePrinting = true;
-        }
-        stakingRewards = IStakingRewards(_stakingRewards);
-    }
-
-    function setRewardStuff(uint256 _minIbToSell, uint256 _minRewardToHavest) external management {
-        minIbToSell = _minIbToSell;
+    function setMinRewardAmounts(uint256 _minCompToSell, uint256 _minRewardToHavest) external management {
+        minCompToSell = _minCompToSell;
         minRewardToHarvest = _minRewardToHavest;
     }
 
-    //adjust dust threshol
-    function setIgnorePrinting(bool _ignorePrinting) external management {
-        ignorePrinting = _ignorePrinting;
+    //These will default to 0.
+    //Will need to be manually set if want is incentized before any harvests
+    function setUniFees(uint24 _compToEth, uint24 _ethToWant) external management {
+        compToEthFee = _compToEth;
+        ethToWantFee = _ethToWant;
+    }
+
+    function setPriceFeeds(address _baseTokenPriceFeed, address _rewardTokenPriceFeed) external management {
+        // just check the call doesnt revert. We dont care about the amount returned 
+        comet.getPrice(_baseTokenPriceFeed);
+        comet.getPrice(_rewardTokenPriceFeed);
+        baseTokenPriceFeed = _baseTokenPriceFeed;
+        rewardTokenPriceFeed = _rewardTokenPriceFeed;
     }
 
     function setKeep3r(address _keep3r) external management {
         keep3r = _keep3r;
     }
 
-    function balanceOfWant() public view returns(uint256) {
-        return want.balanceOf(address(this));
-    }
-
-    function balanceOfCToken() public view returns(uint256) {
-        return cToken.balanceOf(address(this));
+    function nav() external view override returns (uint256) {
+        return _nav();
     }
 
     function _nav() internal view returns (uint256) {
-        uint256 amount = balanceOfWant().add(underlyingBalanceStored());
-
-        if(amount < dustThreshold){
-            return 0;
-        }else{
-            return amount;
-        }
+        return want.balanceOf(address(this)).add(underlyingBalanceStored());
     }
 
-    function underlyingBalanceStored() public view returns (uint256 balance) {
-        uint256 currentCr = balanceOfCToken().add(stakedBalance());
-        if (currentCr < dustThreshold) {
-            balance = 0;
-        } else {
-            //The current exchange rate as an unsigned integer, scaled by 1e18.
-            balance = currentCr.mul(cToken.exchangeRateStored()).div(1e18);
-        }
-    }
-
-    function stakedBalance() public view returns(uint256) {
-        if(address(stakingRewards) == address(0)) return 0;
-
-        return stakingRewards.balanceOf(address(this));
+    function underlyingBalanceStored() public view returns (uint256) {
+        return comet.balanceOf(address(this));
     }
 
     function apr() external view override returns (uint256) {
@@ -2188,46 +1857,26 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function _apr() internal view returns (uint256) {
-        return (cToken.supplyRatePerBlock().add(compBlockShareInWant(0))).mul(blocksPerYear);
+        uint utilization = comet.getUtilization();
+        uint supplyRate = comet.getSupplyRate(utilization).mul(SECONDS_PER_YEAR);
+        uint rewardRate = getRewardAprForSupplyBase(0);
+        return uint256(supplyRate.add(rewardRate));
     }
 
-    function compBlockShareInWant(uint256 change) public view returns (uint256){
+    /*
+    * Get the current reward for supplying APR in Compound III
+    * @param newAmount Any amount that will be added to the total supply in a deposit
+    * @return The reward APR in USD as a decimal scaled up by 1e18
+    */
+    function getRewardAprForSupplyBase(uint newAmount) public view returns (uint) {
+        Comet _comet = comet;
+        uint rewardToSuppliersPerDay = _comet.baseTrackingSupplySpeed().mul(SECONDS_PER_DAY).mul(SCALER);
+        if(rewardToSuppliersPerDay == 0) return 0;
 
-        if(ignorePrinting){
-            return 0;
-        }
-
-        if(stakingRewards.periodFinish() < block.timestamp){
-            return 0;
-        }
-        uint256 distributionPerSec = stakingRewards.getRewardRate(ib);
-        //convert to per dolla
-        uint256 totalStaked = stakingRewards.totalSupply().mul(cToken.exchangeRateStored()).div(1e18);
-        
-        totalStaked = totalStaked.add(change);
-
-        uint256 blockShareSupply;
-        if(totalStaked > 0){
-            blockShareSupply = distributionPerSec.mul(1e18).div(totalStaked);
-        }
-
-        uint256 estimatedWant = _priceCheck(ib, address(want), blockShareSupply);
-        uint256 compRate;
-        if(estimatedWant != 0){
-            compRate = estimatedWant.mul(9).div(10); //10% pessimist
-        }
-
-        return(compRate);
-    }
-
-    //WARNING. manipulatable and simple routing. Only use for safe functions
-    function _priceCheck(address start, address end, uint256 _amount) internal view returns (uint256) {
-        if (_amount == 0) {
-            return 0;
-        }
-        uint256[] memory amounts = router.getAmountsOut(_amount, _getTokenOutPath(start, end));
-
-        return amounts[amounts.length - 1];
+        uint rewardTokenPriceInUsd = _comet.getPrice(rewardTokenPriceFeed);
+        uint wantPriceInUsd = _comet.getPrice(baseTokenPriceFeed);
+        uint wantTotalSupply = _comet.totalSupply().add(newAmount);
+        return rewardTokenPriceInUsd.mul(rewardToSuppliersPerDay).mul(DAYS_PER_YEAR).div(wantTotalSupply.mul(wantPriceInUsd));
     }
 
     function weightedApr() external view override returns (uint256) {
@@ -2240,37 +1889,25 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     //emergency withdraw. sends balance plus amount to governance
-    function emergencyWithdraw(uint256 amount) external override management {
+    //Pass in uint256.max to withdraw everything
+    function emergencyWithdraw(uint256 amount) external override onlyGovernance {
         //dont care about errors here. we want to exit what we can
-        _unStake(_convertFromUnderlying(amount));
-        cToken.redeemUnderlying(amount);
+        comet.withdraw(address(want), amount);
 
-        want.safeTransfer(vault.governance(), balanceOfWant());
+        want.safeTransfer(vault.governance(), want.balanceOf(address(this)));
     }
 
     //withdraw an amount including any want balance
-    function _withdraw(uint256 amount) internal returns (uint256) {
-        //Call to accrue rewards and update exchange rate first
-        cToken.accrueInterest();
-        //This should be accurate due to previous call
+    function _withdraw(uint256 amount) internal returns (uint256) { 
+        //Accrue rewards and interest to the lender so all following calls are acurate
+        comet.accrueAccount(address(this));
         uint256 balanceUnderlying = underlyingBalanceStored();
-        uint256 looseBalance = balanceOfWant();
+        uint256 looseBalance = want.balanceOf(address(this));
         uint256 total = balanceUnderlying.add(looseBalance);
 
-        if (amount >= total) {
-            //cant withdraw more than we own. so withdraw all we can
-            if(balanceUnderlying > dustThreshold){
-                _unStake(stakedBalance());
-                require(cToken.redeem(balanceOfCToken()) == 0, "ctoken: redeemAll fail");
-            }
-            looseBalance = balanceOfWant();
-            if(looseBalance > 0 ){
-                want.safeTransfer(address(strategy), looseBalance);
-                return looseBalance;
-            }else{
-                return 0;
-            }
-
+        if (amount > total) {
+            //cant withdraw more than we own
+            amount = total;
         }
 
         if (looseBalance >= amount) {
@@ -2278,241 +1915,144 @@ contract GenericIronBank is GenericLenderBase {
             return amount;
         }
 
-        //not state changing but OK because of previous call
-        uint256 liquidity = want.balanceOf(address(cToken));
+        uint256 liquidity = comet.totalSupply().sub(comet.totalBorrow());
 
         if (liquidity > 1) {
             uint256 toWithdraw = amount.sub(looseBalance);
 
-            if (toWithdraw > liquidity) {
-                toWithdraw = liquidity;
-            }
-            if(toWithdraw > 0){
-                _unStake(_convertFromUnderlying(toWithdraw));
-                require(cToken.redeemUnderlying(toWithdraw) == 0, "ctoken: redeemUnderlying fail");
+            if (toWithdraw <= liquidity) {
+                //we can take all
+                comet.withdraw(address(want), toWithdraw);
+            } else {
+                //take all we can
+                comet.withdraw(address(want), liquidity);
             }
         }
-
-        looseBalance = balanceOfWant();
+        looseBalance = want.balanceOf(address(this));
         want.safeTransfer(address(strategy), looseBalance);
         return looseBalance;
     }
 
-    function manualClaimAndDontSell() external management{
-        stakingRewards.getReward();
-    }
-
     function harvest() external keepers {
+        _claimCometRewards();
+
         _disposeOfComp();
 
-        uint256 wantBalance = balanceOfWant();
+        uint256 wantBalance = want.balanceOf(address(this));
         if(wantBalance > 0) {
-            cToken.mint(wantBalance);
+            comet.supply(address(want), wantBalance);
         }
-        _stake();
     }
 
     function harvestTrigger(uint256 /*callCost*/) external view returns(bool) {
-        if(address(stakingRewards) == address(0)) return false;
+        if(!isBaseFeeAcceptable()) return false;
 
-        if(getRewardsOwed().add(IERC20(ib).balanceOf(address(this))) > minRewardToHarvest) return true;
+        if(getRewardsOwed().add(IERC20(comp).balanceOf(address(this))) > minRewardToHarvest) return true;
+    }
+  
+    /*
+    * Gets the amount of reward tokens due to this contract address
+    */
+    function getRewardsOwed() public view returns (uint) {
+        CometStructs.RewardConfig memory config = rewardsContract.rewardConfig(address(comet));
+        uint256 accrued = comet.baseTrackingAccrued(address(this));
+        if (config.shouldUpscale) {
+            accrued *= config.rescaleFactor;
+        } else {
+            accrued /= config.rescaleFactor;
+        }
+        uint256 claimed = rewardsContract.rewardsClaimed(address(comet), address(this));
+
+        return accrued > claimed ? accrued - claimed : 0;
     }
 
-    function getRewardsOwed() public view returns(uint256) {
-        return stakingRewards.earned(ib, address(this));
+    /*
+    * External function that Claims the reward tokens due to this contract address
+    */
+    function claimCometRewards() external keepers {
+        _claimCometRewards();
+    }
+
+    /*
+    * Claims the reward tokens due to this contract address
+    */
+    function _claimCometRewards() internal {
+        rewardsContract.claim(address(comet), address(this), true);
     }
 
     function _disposeOfComp() internal {
-        if(address(stakingRewards) != address(0) && stakedBalance() > 0){
-            stakingRewards.getReward();
+        //check for Trade Factory implementation or that Uni fees are not set
+        if(tradeFactory != address(0) || compToEthFee == 0) return;
+
+        uint256 _comp = IERC20(comp).balanceOf(address(this));
+
+        if (_comp > minCompToSell) {
+
+            if(address(want) == weth) {
+                ISwapRouter.ExactInputSingleParams memory params =
+                    ISwapRouter.ExactInputSingleParams(
+                        comp, // tokenIn
+                        address(want), // tokenOut
+                        compToEthFee, // comp-eth fee
+                        address(this), // recipient
+                        now, // deadline
+                        _comp, // amountIn
+                        0, // amountOut
+                        0 // sqrtPriceLimitX96
+                    );
+
+                router.exactInputSingle(params);
+            
+            } else {
+                bytes memory path =
+                    abi.encodePacked(
+                        comp, // comp-ETH
+                        compToEthFee,
+                        weth, // ETH-want
+                        ethToWantFee,
+                        address(want)
+                    );
+
+                // Proceeds from Comp are not subject to minExpectedSwapPercentage
+                // so they could get sandwiched if we end up in an uncle block
+                router.exactInput(
+                    ISwapRouter.ExactInputParams(
+                        path,
+                        address(this),
+                        now,
+                        _comp,
+                        0
+                    )
+                );
+            }
         }
-
-        uint256 _ib = IERC20(ib).balanceOf(address(this));
-
-        if (_ib > minIbToSell && tradeFactory == address(0)) {
-            _swapFrom(_ib);
-        }
-    }
-
-    function _swapFrom(uint256 _amountIn) internal{
-        //First get rid of IB using the Beethoven pool into WETH
-        IBalancerVault.BatchSwapStep[] memory swaps = new IBalancerVault.BatchSwapStep[](1);
-        IAsset[] memory assets = new IAsset[](2);
-        int[] memory limits = new int[](2);
-
-        //Sell ib -> weth
-        swaps[0] = IBalancerVault.BatchSwapStep(
-            ibEthPoolId,
-            0,
-            1,
-            _amountIn,
-            abi.encode(0)
-        );
-
-        //Match the token address with the desired index for this trade
-        assets[0] = IAsset(ib);
-        assets[1] = IAsset(WNATIVE);
-        
-        //Only min we need to set is for the balance going in
-        limits[0] = int(_amountIn);
-
-        IERC20(ib).safeApprove(address(balancerVault), _amountIn);
-
-        balancerVault.batchSwap(
-            IBalancerVault.SwapKind.GIVEN_IN, 
-            swaps, 
-            assets, 
-            _getFundManagement(), 
-            limits, 
-            block.timestamp
-        );
-
-        if(address(want) != WNATIVE) {
-            //Swap from WETH to want through Velederome
-            uint256 wethBalance = IERC20(WNATIVE).balanceOf(address(this));
-            IERC20(WNATIVE).safeApprove(address(router), wethBalance);
-
-            router.swapExactTokensForTokens(
-                wethBalance, 
-                0, 
-                _getTokenOutPath(WNATIVE, address(want)), 
-                address(this), 
-                block.timestamp
-            );
-        }
-    }
-
-    function _getFundManagement() 
-        internal 
-        view 
-        returns (IBalancerVault.FundManagement memory fundManagement) 
-    {
-        fundManagement = IBalancerVault.FundManagement(
-                address(this),
-                false,
-                payable(address(this)),
-                false
-            );
-    }
-
-    function _getTokenOutPath(address _tokenIn, address _tokenOut) internal view returns (IVeledrome.route[] memory _path) {
-        bool isNative = _tokenIn == middleSwapToken || _tokenOut == middleSwapToken;
-        _path = new IVeledrome.route[](isNative ? 1 : 2);
-
-        if (isNative) {
-            _path[0] = IVeledrome.route(
-                _tokenIn,
-                _tokenOut,
-                false
-            );
-        } else {
-            _path[0] = IVeledrome.route(
-                _tokenIn,
-                middleSwapToken,
-                false
-            );
-            _path[1] = IVeledrome.route(
-                middleSwapToken,
-                _tokenOut,
-                stable
-            );
-        }
-    }
-
-    //External function to change the token we use for swaps and the bool for the second route in path
-    //Can only change to either the native or USDC.
-    function setMiddleSwapToken(address _middleSwapToken, bool _stable) external management {
-        require(_middleSwapToken == WNATIVE || _middleSwapToken == usdc);
-        middleSwapToken = _middleSwapToken;
-        stable = _stable;
     }
 
     function deposit() external override management {
-        uint256 balance = balanceOfWant();
-        require(cToken.mint(balance) == 0, "ctoken: mint fail");
-        _stake();
-    }
-
-    function _stake() internal {
-        uint256 balance = balanceOfCToken();
-        if(address(stakingRewards) == address(0) || balance == 0) return;
-
-        stakingRewards.stake(balance);
-    }
-
-    function _unStake(uint256 amount) internal {
-        if(address(stakingRewards) == address(0) || amount == 0) return;
-
-        stakingRewards.withdraw(Math.min(amount, stakedBalance()));
-    }
-
-    function manualUnstake(uint256 amount) external management {
-        stakingRewards.withdraw(Math.min(amount, stakedBalance()));
+        uint256 balance = want.balanceOf(address(this));
+        comet.supply(address(want), balance);
     }
 
     function withdrawAll() external override management returns (bool) {
-        //Call to accrue rewards and update exchange rate first
-        cToken.accrueInterest();
-        uint256 liquidity = want.balanceOf(address(cToken));
-        uint256 liquidityInCTokens = _convertFromUnderlying(liquidity);
-        _unStake(stakedBalance());
-        uint256 amountInCtokens = balanceOfCToken();
-
-        bool all;
-
-        if (liquidityInCTokens > 2) {
-            liquidityInCTokens = liquidityInCTokens-1;
-
-            if (amountInCtokens <= liquidityInCTokens) {
-                //we can take all
-                all = true;
-                cToken.redeem(amountInCtokens);
-            } else {
-                //redo or else price changes
-                cToken.mint(0);
-                liquidityInCTokens = _convertFromUnderlying(want.balanceOf(address(cToken)));
-                //take all we can
-                all = false;
-                cToken.redeem(liquidityInCTokens);
-            }
-        }
-
-        uint256 looseBalance = balanceOfWant();
-        if(looseBalance > 0){
-            want.safeTransfer(address(strategy), looseBalance);
-        }
-        return all;
-
-    }
-
-    function _convertFromUnderlying(uint256 amountOfUnderlying) internal view returns (uint256 balance){
-        if (amountOfUnderlying == 0) {
-            balance = 0;
-        } else {
-            balance = amountOfUnderlying.mul(1e18).div(cToken.exchangeRateStored());
-        }
+        comet.accrueAccount(address(this));
+        uint256 invested = _nav();
+        uint256 returned = _withdraw(invested);
+        return returned >= invested;
     }
 
     function hasAssets() external view override returns (bool) {
-        return underlyingBalanceStored() > 0 || balanceOfWant() > 0;
+        return comet.balanceOf(address(this)) > 0 || want.balanceOf(address(this)) > 0;
     }
 
     function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
-        uint256 cashPrior = want.balanceOf(address(cToken));
+        uint256 borrows = comet.totalBorrow();
+        uint256 supply = comet.totalSupply();
 
-        uint256 borrows = cToken.totalBorrows();
+        uint256 newUtilization = borrows.mul(1e18).div(supply.add(amount));
+        uint256 newSupply = comet.getSupplyRate(newUtilization).mul(SECONDS_PER_YEAR);
 
-        uint256 reserves = cToken.totalReserves();
-
-        uint256 reserverFactor = cToken.reserveFactorMantissa();
-
-        InterestRateModel model = cToken.interestRateModel();
-
-        //the supply rate is derived from the borrow rate, reserve factor and the amount of total borrows.
-        uint256 supplyRate = model.getSupplyRate(cashPrior.add(amount), borrows, reserves, reserverFactor);
-        supplyRate = supplyRate.add(compBlockShareInWant(amount));
-
-        return supplyRate.mul(blocksPerYear);
+        uint256 newReward = getRewardAprForSupplyBase(amount);
+        return newSupply.add(newReward);
     }
 
     function protectedTokens() internal view override returns (address[] memory) {
@@ -2521,6 +2061,21 @@ contract GenericIronBank is GenericLenderBase {
         return protected;
     }
 
+    modifier keepers() {
+        require(
+            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
+            "!keepers"
+        );
+        _;
+    }
+
+    // check if the current baseFee is below our external target
+    function isBaseFeeAcceptable() internal view returns (bool) {
+        return
+            IBaseFee(0xb5e1CAcB567d98faaDB60a1fD4820720141f064F)
+                .isCurrentBaseFeeAcceptable();
+    }
+   
     // ---------------------- YSWAPS FUNCTIONS ----------------------
     function setTradeFactory(address _tradeFactory) external onlyGovernance {
         if (tradeFactory != address(0)) {
@@ -2529,8 +2084,8 @@ contract GenericIronBank is GenericLenderBase {
 
         ITradeFactory tf = ITradeFactory(_tradeFactory);
 
-        IERC20(ib).safeApprove(_tradeFactory, type(uint256).max);
-        tf.enable(ib, address(want));
+        IERC20(comp).safeApprove(_tradeFactory, type(uint256).max);
+        tf.enable(comp, address(want));
         
         tradeFactory = _tradeFactory;
     }
@@ -2540,16 +2095,8 @@ contract GenericIronBank is GenericLenderBase {
     }
 
     function _removeTradeFactoryPermissions() internal {
-        IERC20(ib).safeApprove(tradeFactory, 0);
-        
+        IERC20(comp).safeApprove(tradeFactory, 0);
+        ITradeFactory(tradeFactory).disable(comp, address(want));
         tradeFactory = address(0);
-    }
-
-    modifier keepers() {
-        require(
-            msg.sender == address(keep3r) || msg.sender == address(strategy) || msg.sender == vault.governance() || msg.sender == IBaseStrategy(strategy).strategist(),
-            "!keepers"
-        );
-        _;
     }
 }

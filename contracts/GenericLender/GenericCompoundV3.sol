@@ -16,7 +16,7 @@ import {ISwapRouter} from "../Interfaces/UniswapInterfaces/V3/ISwapRouter.sol";
 import "./GenericLenderBase.sol";
 
 /********************
- *   A lender plugin for LenderYieldOptimiser for any borrowable erc20 asset on compoundV3 (not eth)
+ *   A lender plugin for LenderYieldOptimiser for any base token erc20 asset on compoundV3
  *   Made by @Schlagonia
  *   https://github.com/Schlagonia/Yearn-V2-Generic-Lender/blob/main/contracts/GenericLender/GenericCompoundV3.sol
  *
@@ -83,7 +83,7 @@ contract GenericCompoundV3 is GenericLenderBase {
         uint BASE_INDEX_SCALE = comet.baseIndexScale();
         // this is needed for reward apr calculations based on decimals of want
         // we scale rewards per second to the base token decimals and diff between comp decimals and the index scale
-        SCALER = BASE_MANTISSA.mul(1e18 / BASE_INDEX_SCALE);
+        SCALER = BASE_MANTISSA.mul(1e18).div(BASE_INDEX_SCALE);
 
         want.safeApprove(_comet, type(uint256).max);
         IERC20(comp).safeApprove(address(router), type(uint256).max);
@@ -166,7 +166,7 @@ contract GenericCompoundV3 is GenericLenderBase {
         uint rewardTokenPriceInUsd = _comet.getPrice(rewardTokenPriceFeed);
         uint wantPriceInUsd = _comet.getPrice(baseTokenPriceFeed);
         uint wantTotalSupply = _comet.totalSupply().add(newAmount);
-        return rewardTokenPriceInUsd.mul(rewardToSuppliersPerDay).div(wantTotalSupply.mul(wantPriceInUsd)).mul(DAYS_PER_YEAR);
+        return rewardTokenPriceInUsd.mul(rewardToSuppliersPerDay).mul(DAYS_PER_YEAR).div(wantTotalSupply.mul(wantPriceInUsd));
     }
 
     function weightedApr() external view override returns (uint256) {
