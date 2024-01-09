@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "../Interfaces/UniswapInterfaces/IUniswapV2Router02.sol";
 
 import "./GenericLenderBase.sol";
-import {IAToken} from "../Interfaces/Aave/V3/IAToken.sol";
+import {IAToken} from "../Interfaces/Aave/V3/IAtoken.sol";
 import {IStakedAave} from "../Interfaces/Aave/V3/IStakedAave.sol";
 import {IPool} from "../Interfaces/Aave/V3/IPool.sol";
 import {IProtocolDataProvider} from "../Interfaces/Aave/V3/IProtocolDataProvider.sol";
@@ -58,7 +58,7 @@ contract GenericAaveV3 is GenericLenderBase {
     using Address for address;
     using SafeMath for uint256;
 
-    IProtocolDataProvider public constant protocolDataProvider = IProtocolDataProvider(0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3);
+    IProtocolDataProvider public constant protocolDataProvider = IProtocolDataProvider(0xFc21d6d146E6086B8359705C8b28512a983db0cb);
     IAToken public aToken;
     
     // stkAave addresses only Applicable for Mainnet, We leave then since they wont be called on any other chain
