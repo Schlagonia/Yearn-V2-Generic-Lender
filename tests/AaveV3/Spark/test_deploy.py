@@ -1,12 +1,17 @@
 from pyrsistent import inc
 import pytest
 import brownie
-from brownie import Wei, GenericAaveV3
+from brownie import Wei, GenericSpark
 
-def test_deploy(strategist, strategy, GenericAaveV3, weth, dai, adai, lendingPool, router, router2):
+
+def test_deploy(
+    strategist, strategy, GenericSpark, weth, dai, adai, lendingPool, router, router2
+):
     incentivize = False
 
-    v3Plugin = strategist.deploy(GenericAaveV3, strategy, weth, router, router2, "Spark", incentivize)
+    v3Plugin = strategist.deploy(
+        GenericSpark, strategy, weth, router, router2, "Spark", incentivize
+    )
 
     incentivized = v3Plugin.isIncentivised()
     aToken = v3Plugin.aToken()
@@ -18,25 +23,17 @@ def test_deploy(strategist, strategy, GenericAaveV3, weth, dai, adai, lendingPoo
     assert native == weth
     assert _router == router
     assert aToken == adai
-    assert allowance == 2**256-1
-    #assert v3Plugin.underlyingBalanceStored() == 0
+    assert allowance == 2 ** 256 - 1
 
-def test_adding_plugIn(
-    strategy,
-    v3Plugin,
-    gov
-):
-    strategy.addLender(v3Plugin, {"from" : gov})
+
+def test_adding_plugIn(strategy, v3Plugin, gov):
+    strategy.addLender(v3Plugin, {"from": gov})
     assert strategy.numLenders() == 1
     assert v3Plugin.strategy() == strategy.address
     assert v3Plugin.want() == strategy.want()
     assert v3Plugin.vault() == v3Plugin.vault()
 
-def test_reinitialize(
-    v3Plugin,
-    dai,
-    router,
-    router2
-):
+
+def test_reinitialize(v3Plugin, dai, router, router2):
     with brownie.reverts():
         v3Plugin.initialize(dai.address, router, router2, False)

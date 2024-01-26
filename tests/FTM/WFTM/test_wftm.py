@@ -2,6 +2,7 @@ from itertools import count
 from brownie import Wei, reverts
 from useful_methods import genericStateOfVault, genericStateOfStrat
 
+
 def test_normal_activity(
     wftm,
     scrWftm,
@@ -39,7 +40,6 @@ def test_normal_activity(
             f"Lender: {j[0]}, Deposits: {formS.format(j[1]/1e18)} APR: {form.format(j[2]/1e18)}"
         )
 
-
     strategy.harvest({"from": strategist})
 
     status = strategy.lendStatuses()
@@ -57,7 +57,7 @@ def test_normal_activity(
         chain.mine(waitBlock)
         chain.sleep(waitBlock)
         # print(f'\n----harvest----')
-        scrWftm.mint(0,{"from": whale})
+        scrWftm.mint(0, {"from": whale})
         strategy.harvest({"from": strategist})
 
         # genericStateOfStrat(strategy, currency, vault)
@@ -71,7 +71,7 @@ def test_normal_activity(
         difff = profit - totaleth
         # print(f'Diff: {difff}')
 
-        blocks_per_year = 3154 * 10**4
+        blocks_per_year = 3154 * 10 ** 4
         assert startingBalance != 0
         time = (i + 1) * waitBlock
         assert time != 0

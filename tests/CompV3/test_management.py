@@ -41,4 +41,3 @@ def test_manual_override(
             plugin.deposit({"from": rando})
         with brownie.reverts("!management"):
             plugin.withdraw(1, {"from": rando})
-

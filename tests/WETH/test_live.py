@@ -113,7 +113,7 @@ def test_live2(
     gov,
     rando,
     fn_isolation,
-    accounts
+    accounts,
 ):
     gov = ychad
     decimals = currency.decimals()
@@ -121,25 +121,21 @@ def test_live2(
     strategy = live_strat_weth_2
     vault = live_vault_weth_2
     ms = accounts.at("0x16388463d60ffe0661cf7f1f31a7d658ac790ff7", force=True)
-    #genericStateOfStrat(strategy, currency, vault)
-    #genericStateOfVault(vault, currency)
+    # genericStateOfStrat(strategy, currency, vault)
+    # genericStateOfVault(vault, currency)
 
     vault.updateStrategyDebtRatio(strategy, 0, {"from": ms})
     strategy.harvest({"from": ms})
-    
 
     genericStateOfStrat(strategy, currency, vault)
     genericStateOfVault(vault, currency)
 
-    #currency.approve(vault, 2 ** 256 - 1, {"from": whale})
-    #currency.approve(vault, 2 ** 256 - 1, {"from": rando})
+    # currency.approve(vault, 2 ** 256 - 1, {"from": whale})
+    # currency.approve(vault, 2 ** 256 - 1, {"from": rando})
 
-    #whale_deposit = 100 * (10 ** (decimals))
-    #currency.transfer(rando, whale_deposit, {"from": whale})
-    #vault.deposit(whale_deposit, {"from": whale})
-
-    
-    
+    # whale_deposit = 100 * (10 ** (decimals))
+    # currency.transfer(rando, whale_deposit, {"from": whale})
+    # vault.deposit(whale_deposit, {"from": whale})
 
     form = "{:.2%}"
     formS = "{:,.0f}"

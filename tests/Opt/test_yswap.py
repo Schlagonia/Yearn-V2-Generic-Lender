@@ -8,8 +8,20 @@ from weiroll import WeirollPlanner, WeirollContract
 
 
 def test_yswap(
-    chain, pluggedVaultUsdc, pluggedStrategyUsdc, pluginUsdc, strategist,
-    usdc, whaleUsdc, trade_factory, router, gov, ib, rando, whaleIb, cUsdc
+    chain,
+    pluggedVaultUsdc,
+    pluggedStrategyUsdc,
+    pluginUsdc,
+    strategist,
+    usdc,
+    whaleUsdc,
+    trade_factory,
+    router,
+    gov,
+    ib,
+    rando,
+    whaleIb,
+    cUsdc,
 ):
     # Deposit to the vault
     plugin = pluginUsdc
@@ -27,7 +39,7 @@ def test_yswap(
     strategy.harvest({"from": strategist})
     assert close(plugin.nav(), amount)
 
-    #sleep(chain, 3600)
+    # sleep(chain, 3600)
     chain.sleep(3600)
     chain.mine(1)
 
@@ -49,7 +61,7 @@ def test_yswap(
     plugin.manualClaimAndDontSell({"from": strategist})
     assert ib.balanceOf(plugin.address) > 0
     chain.mine(1)
-    #should not sell rewards
+    # should not sell rewards
     plugin.harvest({"from": gov})
 
     assert ib.balanceOf(plugin.address) > 0
@@ -71,7 +83,7 @@ def test_yswap(
     planner = WeirollPlanner(trade_factory)
     token_in = WeirollContract.createContract(token_in)
 
-    #token_bal_before = token.balanceOf(plugin)
+    # token_bal_before = token.balanceOf(plugin)
 
     route = []
     if token.symbol() == "WETH" or token.symbol() == "USDC":
@@ -92,12 +104,7 @@ def test_yswap(
         )
     )
 
-    planner.add(
-        token_in.approve(
-            router.address,
-            amount_in
-        )
-    )
+    planner.add(token_in.approve(router.address, amount_in))
 
     """
     planner.add(
@@ -110,23 +117,20 @@ def test_yswap(
         )
     )
     """
-    #simulate a swap since there is currenty no liquidity for IB
-    planner.add(
-        token_out.transfer(
-            plugin.address,
-            to_send
-        )
-    )
+    # simulate a swap since there is currenty no liquidity for IB
+    planner.add(token_out.transfer(plugin.address, to_send))
 
     cmds, state = planner.plan()
-    trade_factory.execute(cmds, state, {"from": "0x7Cd0A1A67B6aC5fC053d9b60C1E84592F248155b"})
+    trade_factory.execute(
+        cmds, state, {"from": "0x7Cd0A1A67B6aC5fC053d9b60C1E84592F248155b"}
+    )
     afterBal = usdc.balanceOf(plugin)
     print(usdc.balanceOf(plugin))
 
     assert afterBal > 0
     assert ib.balanceOf(plugin.address) == 0
 
-    strategy.setWithdrawalThreshold(0, {"from":strategist})
+    strategy.setWithdrawalThreshold(0, {"from": strategist})
     cUsdc.accrueInterest({"from": rando})
     tx = strategy.harvest({"from": strategist})
     print(tx.events)

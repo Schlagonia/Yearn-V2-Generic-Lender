@@ -8,7 +8,7 @@ def test_withdraw_all(
     accounts,
     fn_isolation,
     GenericScream,
-    Contract
+    Contract,
 ):
     strategist = accounts.at(strategy.strategist(), force=True)
     gov = accounts.at(vault.governance(), force=True)
@@ -25,13 +25,12 @@ def test_withdraw_all(
 
     strategy.harvest({"from": strategist})
 
-
     for i in range(2):
 
         waitBlock = 25
         chain.mine(waitBlock)
         chain.sleep(waitBlock)
-        scrWftm.mint(0,{"from": whale})
+        scrWftm.mint(0, {"from": whale})
         strategy.harvest({"from": strategist})
 
     scream_plugin = GenericScream.at(strategy.lenders(0))

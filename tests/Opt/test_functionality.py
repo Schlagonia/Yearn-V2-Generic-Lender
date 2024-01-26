@@ -3,17 +3,13 @@ import brownie
 
 from brownie import Wei
 
-#Set is Incentivised
-def test_set_ignorePrinting(
-    plugin,
-    gov,
-    rando
-):
+# Set is Incentivised
+def test_set_ignorePrinting(plugin, gov, rando):
     currentState = plugin.ignorePrinting()
     assert currentState == True
     opposite = not currentState
     plugin.setIgnorePrinting(opposite, {"from": gov})
-    #Can assume if it doesnt return the original it returned the correct since its a boolean
+    # Can assume if it doesnt return the original it returned the correct since its a boolean
     assert plugin.ignorePrinting() == opposite
 
     plugin.setIgnorePrinting(currentState, {"from": gov})
@@ -23,16 +19,11 @@ def test_set_ignorePrinting(
         plugin.setIgnorePrinting(opposite, {"from": rando})
 
 
-#set keeper
-def test_set_keeper(
-    plugin,
-    gov,
-    keeper,
-    rando
-):
+# set keeper
+def test_set_keeper(plugin, gov, keeper, rando):
 
     plugin.setKeep3r(keeper, {"from": gov})
-    #Can assume if it doesnt return the original it returned the correct since its a boolean
+    # Can assume if it doesnt return the original it returned the correct since its a boolean
     assert plugin.keep3r() == keeper
 
     with brownie.reverts():
@@ -40,14 +31,7 @@ def test_set_keeper(
 
 
 def test_change_middle_token(
-    plugin,
-    gov,
-    rando,
-    router,
-    router2,
-    usdc,
-    weth,
-    strategist
+    plugin, gov, rando, router, router2, usdc, weth, strategist
 ):
     assert plugin.middleSwapToken() == usdc
     assert plugin.stable() == False
@@ -62,7 +46,7 @@ def test_change_middle_token(
     assert plugin.middleSwapToken() == weth
     assert plugin.stable() == True
 
-    #Should not be able to inject any other address
+    # Should not be able to inject any other address
     with brownie.reverts():
         plugin.setMiddleSwapToken(rando, True, {"from": gov})
 
@@ -104,4 +88,3 @@ def test_manual_override(
             plugin.deposit({"from": rando})
         with brownie.reverts("!management"):
             plugin.withdraw(1, {"from": rando})
-

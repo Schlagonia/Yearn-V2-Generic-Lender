@@ -1,5 +1,6 @@
 from brownie import interface
 
+
 def test_set_claim_comp(
     wftm,
     scrWftm,
@@ -38,9 +39,11 @@ def test_set_claim_comp(
         waitBlock = 25
         chain.mine(waitBlock)
         chain.sleep(waitBlock)
-        scrWftm.mint(0,{"from": whale})
+        scrWftm.mint(0, {"from": whale})
         strategy.harvest({"from": strategist})
 
     assert scream.balanceOf(scream_plugin) == 0
-    interface.ComptrollerI(unitroller).claimComp(scream_plugin, [ctoken], {"from": scream_plugin})
+    interface.ComptrollerI(unitroller).claimComp(
+        scream_plugin, [ctoken], {"from": scream_plugin}
+    )
     assert scream.balanceOf(scream_plugin) > 0

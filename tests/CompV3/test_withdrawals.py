@@ -20,7 +20,7 @@ def test_withdrawals_work(
     vault,
     strategy,
     fn_isolation,
-    currency
+    currency,
 ):
     starting_balance = currency.balanceOf(strategist)
 

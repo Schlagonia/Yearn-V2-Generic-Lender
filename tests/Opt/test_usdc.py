@@ -7,7 +7,16 @@ import brownie
 
 
 def test_good_migration(
-    usdc, OptStrategy, chain, whaleUsdc, gov, strategist, rando, vaultUsdc, pluggedStrategyUsdc, fn_isolation
+    usdc,
+    OptStrategy,
+    chain,
+    whaleUsdc,
+    gov,
+    strategist,
+    rando,
+    vaultUsdc,
+    pluggedStrategyUsdc,
+    fn_isolation,
 ):
     currency = usdc
     whale = whaleUsdc
@@ -33,7 +42,6 @@ def test_good_migration(
     chain.sleep(30 * 13)
     chain.mine(30)
 
-    
     strategy.harvest({"from": strategist})
 
     strategy_debt = vault.strategies(strategy)[6]  # totalDebt
@@ -71,7 +79,7 @@ def test_normal_activity(
     vaultUsdc,
     pluggedStrategyUsdc,
     fn_isolation,
-    pluginUsdc
+    pluginUsdc,
 ):
     starting_balance = usdc.balanceOf(strategist)
     currency = usdc
@@ -180,7 +188,17 @@ def test_normal_activity(
 
 
 def test_debt_increase(
-    usdc, OptStrategy, chain, whale, gov, strategist, rando, vaultUsdc, pluggedStrategyUsdc, fn_isolation, whaleUsdc
+    usdc,
+    OptStrategy,
+    chain,
+    whale,
+    gov,
+    strategist,
+    rando,
+    vaultUsdc,
+    pluggedStrategyUsdc,
+    fn_isolation,
+    whaleUsdc,
 ):
     whale = whaleUsdc
     vault = vaultUsdc
@@ -245,7 +263,7 @@ def test_vault_shares(
     whaleUsdc,
     strategist,
     fn_isolation,
-    pluginUsdc
+    pluginUsdc,
 ):
     whale = whaleUsdc
     vault = vaultUsdc
@@ -307,14 +325,13 @@ def test_vault_shares(
     gov_share = vault.balanceOf(strategist)
     rew_share = vault.balanceOf(rewards)
     # no profit just aum fee. meaning total balance should be the same
-    assert (
-        (gov_share + whale_share + rew_share) * vault.pricePerShare() / (10 ** decimals)
-        > amount1 * 2 * 0.999
-        and (gov_share + whale_share + rew_share)
-        * vault.pricePerShare()
-        / (10 ** decimals)
-        < amount1 * 2 * 1.001
-    )
+    assert (gov_share + whale_share + rew_share) * vault.pricePerShare() / (
+        10 ** decimals
+    ) > amount1 * 2 * 0.999 and (
+        gov_share + whale_share + rew_share
+    ) * vault.pricePerShare() / (
+        10 ** decimals
+    ) < amount1 * 2 * 1.001
     cUsdc.accrueInterest({"from": plugin.address})
     strategy.harvest({"from": strategist})
 
@@ -361,7 +378,7 @@ def test_apr(
     whaleUsdc,
     strategist,
     fn_isolation,
-    pluginUsdc
+    pluginUsdc,
 ):
     whale = whaleUsdc
     vault = vaultUsdc

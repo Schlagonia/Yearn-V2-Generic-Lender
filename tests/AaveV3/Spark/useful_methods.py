@@ -46,10 +46,11 @@ def sleep(chain, blocks):
     endTime = blocks * 13 + timeN
     chain.mine(blocks, endTime)
 
-#Determines if second is with 1% of first
-#For apr calcs
+
+# Determines if second is with 1% of first
+# For apr calcs
 def close(first, second):
-    if first * 1.01 >= second or first * .99 <= second:
+    if first * 1.01 >= second or first * 0.99 <= second:
         return True
     else:
         return False

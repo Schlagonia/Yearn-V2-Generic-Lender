@@ -4,6 +4,7 @@ from useful_methods import genericStateOfVault, genericStateOfStrat
 import random
 import brownie
 
+
 def test_normal_activity(
     ftm_dai,
     scrDai,
@@ -32,7 +33,7 @@ def test_normal_activity(
     chain.sleep(10)
     chain.mine(1)
     strategy.setWithdrawalThreshold(0, {"from": gov})
-    #assert strategy.harvestTrigger(1 * 1e18) == True
+    # assert strategy.harvestTrigger(1 * 1e18) == True
     print(whale_deposit / 1e18)
     status = strategy.lendStatuses()
     form = "{:.2%}"
@@ -41,7 +42,6 @@ def test_normal_activity(
         print(
             f"Lender: {j[0]}, Deposits: {formS.format(j[1]/1e18)} APR: {form.format(j[2]/1e18)}"
         )
-
 
     strategy.harvest({"from": strategist})
 
@@ -60,7 +60,7 @@ def test_normal_activity(
         chain.mine(waitBlock)
         chain.sleep(waitBlock)
         # print(f'\n----harvest----')
-        scrDai.mint(0,{"from": whale})
+        scrDai.mint(0, {"from": whale})
         strategy.harvest({"from": strategist})
 
         # genericStateOfStrat(strategy, currency, vault)
@@ -74,7 +74,7 @@ def test_normal_activity(
         difff = profit - totaleth
         # print(f'Diff: {difff}')
 
-        blocks_per_year = 3154 * 10**4
+        blocks_per_year = 3154 * 10 ** 4
         assert startingBalance != 0
         time = (i + 1) * waitBlock
         assert time != 0
