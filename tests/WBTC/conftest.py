@@ -189,9 +189,11 @@ def weth(interface):
 def cdai(interface):
     yield interface.CErc20I("0x5d3a536e4d6dbd6114cc1ead35777bab948e3643")
 
+
 @pytest.fixture
 def crWbtc(interface):
     yield interface.CErc20I("0x8Fc8BFD80d6A9F17Fb98A373023d72531792B431")
+
 
 @pytest.fixture
 def cUsdc(interface):

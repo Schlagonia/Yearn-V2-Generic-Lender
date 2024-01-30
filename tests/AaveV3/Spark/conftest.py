@@ -3,18 +3,23 @@ from brownie import Wei, config, Contract
 
 
 @pytest.fixture
-def wftm():
-    yield Contract("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2")
+def dai():
+    yield Contract("0x6B175474E89094C44Da98b954EedeAC495271d0F")
 
 
 @pytest.fixture
-def aWftm():
-    yield "0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8"
+def adai():
+    yield "0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B"
+
+
+@pytest.fixture
+def weth():
+    yield "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 
 
 @pytest.fixture
 def lendingPool():
-    yield "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
+    yield "0xC13e21B648A5Ee794902342038FF3aDAB66BE987"
 
 
 @pytest.fixture
@@ -68,15 +73,15 @@ def rando(accounts):
 @pytest.fixture
 def realVault(pm):
     Vault = pm(config["dependencies"][0]).Vault
-    realVault = Vault.at("0xC1f3C276Bf73396C020E8354bcA581846171649d")
+    realVault = Vault.at("0xdA816459F1AB5631232FE5e97a05BBBb94970c95")
     yield realVault
 
 
 @pytest.fixture
-def vault(gov, rewards, guardian, wftm, pm):
+def vault(gov, rewards, guardian, dai, pm):
     Vault = pm(config["dependencies"][0]).Vault
     vault = Vault.deploy({"from": guardian})
-    vault.initialize(wftm, gov, rewards, "", "")
+    vault.initialize(dai, gov, rewards, "", "")
     vault.setDepositLimit(2 ** 256 - 1, {"from": gov})
 
     yield vault
@@ -84,7 +89,7 @@ def vault(gov, rewards, guardian, wftm, pm):
 
 @pytest.fixture
 def realStrategy(FtmStrategy):
-    realStrategy = FtmStrategy.at("0x23c7DB62d07425733a0F61B4b2039b27Fd3cD0B1")
+    realStrategy = FtmStrategy.at("0x3280499298ACe3FD3cd9C2558e9e8746ACE3E52d")
     yield realStrategy
 
 
@@ -104,9 +109,9 @@ def strategy(
 
 
 @pytest.fixture
-def v3Plugin(strategist, GenericAaveV3, strategy, wftm, router, router2):
+def v3Plugin(strategist, GenericSpark, strategy, weth, router, router2):
     v3Plugin = strategist.deploy(
-        GenericAaveV3, strategy, wftm.address, router, router2, "AaveV3", False
+        GenericSpark, strategy, weth, router, router2, "Spark", False
     )
 
     assert v3Plugin.underlyingBalanceStored() == 0

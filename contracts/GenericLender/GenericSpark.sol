@@ -53,12 +53,12 @@ interface IReserveInterestRateStrategy {
  *
  ********************* */
 
-contract GenericAaveV3 is GenericLenderBase {
+contract GenericSpark is GenericLenderBase {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
-    IProtocolDataProvider public constant protocolDataProvider = IProtocolDataProvider(0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3);
+    IProtocolDataProvider public constant protocolDataProvider = IProtocolDataProvider(0xFc21d6d146E6086B8359705C8b28512a983db0cb);
     IAToken public aToken;
     
     // stkAave addresses only Applicable for Mainnet, We leave then since they wont be called on any other chain
@@ -129,7 +129,7 @@ contract GenericAaveV3 is GenericLenderBase {
         bool _isIncentivised
     ) external returns (address newLender) {
         newLender = _clone(_strategy, _name);
-        GenericAaveV3(newLender).initialize(WNATIVE, _baseRouter, _secondRouter, _isIncentivised);
+        GenericSpark(newLender).initialize(WNATIVE, _baseRouter, _secondRouter, _isIncentivised);
     }
 
     function _initialize(

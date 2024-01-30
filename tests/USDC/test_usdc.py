@@ -290,14 +290,13 @@ def test_vault_shares(
     gov_share = vault.balanceOf(strategist)
     rew_share = vault.balanceOf(rewards)
     # no profit just aum fee. meaning total balance should be the same
-    assert (
-        (gov_share + whale_share + rew_share) * vault.pricePerShare() / (10 ** decimals)
-        > amount1 * 2 * 0.999
-        and (gov_share + whale_share + rew_share)
-        * vault.pricePerShare()
-        / (10 ** decimals)
-        < amount1 * 2 * 1.001
-    )
+    assert (gov_share + whale_share + rew_share) * vault.pricePerShare() / (
+        10 ** decimals
+    ) > amount1 * 2 * 0.999 and (
+        gov_share + whale_share + rew_share
+    ) * vault.pricePerShare() / (
+        10 ** decimals
+    ) < amount1 * 2 * 1.001
     cUsdc.mint(0, {"from": whale})
     crUsdc.mint(0, {"from": whale})
     strategy.harvest({"from": strategist})

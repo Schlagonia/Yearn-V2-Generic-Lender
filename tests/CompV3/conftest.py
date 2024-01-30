@@ -12,10 +12,11 @@ def live_vault_usdc(pm):
     Vault = pm(config["dependencies"][0]).Vault
     yield Vault.at("0xa354F35829Ae975e850e23e9615b11Da1B3dC4DE")
 
+
 @pytest.fixture
 def live_vault_usdt(pm):
     Vault = pm(config["dependencies"][0]).Vault
-    vault = Vault.at('0xAf322a2eDf31490250fdEb0D712621484b09aBB6')
+    vault = Vault.at("0xAf322a2eDf31490250fdEb0D712621484b09aBB6")
     yield vault
 
 
@@ -32,6 +33,7 @@ def live_GenericCream_usdc_1(GenericCream):
 @pytest.fixture
 def live_GenericDyDx_usdc_1(GenericDyDx):
     yield GenericDyDx.at("0x6C842746F21Ca34542EDC6895dFfc8D4e7D2bC1c")
+
 
 # change these fixtures for generic tests
 @pytest.fixture
@@ -52,9 +54,9 @@ def whale(accounts, web3, weth):
     acc = accounts.at("0xBA12222222228d8Ba445958a75a0704d566BF2C8", force=True)
 
     # lots of weth account
-    #wethAcc = accounts.at("0xeBec795c9c8bBD61FFc14A6662944748F299cAcf", force=True)
-    #weth.approve(acc, 2 ** 256 - 1, {"from": wethAcc})
-    #weth.transfer(acc, weth.balanceOf(wethAcc), {"from": wethAcc})
+    # wethAcc = accounts.at("0xeBec795c9c8bBD61FFc14A6662944748F299cAcf", force=True)
+    # weth.approve(acc, 2 ** 256 - 1, {"from": wethAcc})
+    # weth.transfer(acc, weth.balanceOf(wethAcc), {"from": wethAcc})
 
     assert weth.balanceOf(acc) > 0
     yield acc
@@ -98,18 +100,22 @@ def keeper(accounts):
 def rando(accounts):
     yield accounts[9]
 
+
 @pytest.fixture
 def gasOracle():
     yield Contract("0xb5e1CAcB567d98faaDB60a1fD4820720141f064F")
 
+
 @pytest.fixture
 def strategist_ms(accounts):
-        # like governance, but better
+    # like governance, but better
     yield accounts.at("0x16388463d60FFE0661Cf7F1f31a7D658aC790ff7", force=True)
+
 
 @pytest.fixture
 def trade_factory():
     yield Contract("0xd6a8ae62f4d593DAf72E2D7c9f7bDB89AB069F06")
+
 
 # specific addresses
 @pytest.fixture
@@ -136,9 +142,11 @@ def cdai(interface):
 def cUsdc(interface):
     yield interface.Comet("0xc3d688B66703497DAA19211EEdff47f25384cdc3")
 
+
 @pytest.fixture
 def cWeth(interface):
     yield interface.Comet("0xA17581A9E3356d9A858b789D68B4d866e593aE94")
+
 
 @pytest.fixture
 def cToken(currency, usdc, cUsdc, cWeth):
@@ -146,6 +154,7 @@ def cToken(currency, usdc, cUsdc, cWeth):
         yield cUsdc
     else:
         yield cWeth
+
 
 @pytest.fixture
 def crUsdc(interface):
@@ -156,9 +165,11 @@ def crUsdc(interface):
 def aUsdc(interface):
     yield interface.IAToken("0xBcca60bB61934080951369a648Fb03DF4F96263C")
 
+
 @pytest.fixture
 def comp(interface):
     yield interface.ERC20("0xc00e94Cb662C3520282E6f5717214004A7f26888")
+
 
 @pytest.fixture(scope="module", autouse=True)
 def shared_setup(module_isolation):
@@ -176,28 +187,22 @@ def vault(gov, rewards, guardian, currency, pm):
 
 @pytest.fixture
 def strategy(
-    strategist,
-    gov,
-    rewards,
-    keeper,
-    vault,
-    cToken,
-    Strategy,
-    GenericCompoundV3,
-    weth
+    strategist, gov, rewards, keeper, vault, cToken, Strategy, GenericCompoundV3, weth
 ):
     strategy = strategist.deploy(Strategy, vault)
     strategy.setKeeper(keeper, {"from": gov})
     strategy.setWithdrawalThreshold(0, {"from": gov})
     strategy.setRewards(rewards, {"from": strategist})
 
-    compoundV3Plugin = strategist.deploy(GenericCompoundV3, strategy, "CompoundV3", cToken)
+    compoundV3Plugin = strategist.deploy(
+        GenericCompoundV3, strategy, "CompoundV3", cToken
+    )
 
     if cToken.baseToken() == weth:
         compoundV3Plugin.setPriceFeeds(
             "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
             compoundV3Plugin.rewardTokenPriceFeed(),
-            {"from": gov}
+            {"from": gov},
         )
 
     assert compoundV3Plugin.apr() > 0

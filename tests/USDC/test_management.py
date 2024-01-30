@@ -42,8 +42,18 @@ def test_manual_override(
         with brownie.reverts("!management"):
             plugin.withdraw(1, {"from": rando})
 
+
 def test_set_referral(
-    strategy, chain, vault, currency, interface, whale, strategist, gov, rando, GenericAave
+    strategy,
+    chain,
+    vault,
+    currency,
+    interface,
+    whale,
+    strategist,
+    gov,
+    rando,
+    GenericAave,
 ):
 
     decimals = currency.decimals()
@@ -63,8 +73,8 @@ def test_set_referral(
     vault.deposit(amount1, {"from": strategist})
     vault.deposit(amount2, {"from": whale})
     aave_lender = GenericAave.at(strategy.lenders(3))
-    aave_lender.setIsIncentivised(True, {'from': strategist}) # to increase APR
-    aave_lender.setReferralCode(169, {'from': strategist})
+    aave_lender.setIsIncentivised(True, {"from": strategist})  # to increase APR
+    aave_lender.setReferralCode(169, {"from": strategist})
 
     tx = strategy.harvest({"from": strategist})
-    assert tx.events['Deposit']['referral'] == 169
+    assert tx.events["Deposit"]["referral"] == 169

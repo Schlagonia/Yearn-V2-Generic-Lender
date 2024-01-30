@@ -15,37 +15,37 @@ def test_harvest(
     chain,
     op,
     ib,
-    whaleIb
+    whaleIb,
 ):
     strategy = pluggedStrategy
     vault = pluggedVault
 
     assert plugin.hasAssets() == False
     assert plugin.nav() == 0
-    #Deposit
+    # Deposit
     amount = Wei("50 ether")
     deposit(amount, whale, weth, vault)
 
-    strategy.harvest({"from":gov})
+    strategy.harvest({"from": gov})
     assert plugin.hasAssets() == True
-    assert plugin.nav() >= amount * .999
+    assert plugin.nav() >= amount * 0.999
     assert plugin.nav() == plugin.underlyingBalanceStored()
 
     assert plugin.harvestTrigger("100000000") == False
     sleep(chain, 60)
     ib.transfer(plugin.address, 1e18, {"from": whaleIb})
-    assert plugin.harvestTrigger("100000000") == True 
-    
+    assert plugin.harvestTrigger("100000000") == True
 
     with brownie.reverts():
-        plugin.harvest({"from":rando})
+        plugin.harvest({"from": rando})
 
     before_bal = plugin.underlyingBalanceStored()
     before_stake = plugin.stakedBalance()
-    plugin.harvest({"from":gov})
+    plugin.harvest({"from": gov})
     assert ib.balanceOf(plugin.address) == 0
     assert before_bal < plugin.underlyingBalanceStored()
     assert before_stake < plugin.stakedBalance()
+
 
 """
 def test_harvest_usdc(

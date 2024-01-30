@@ -4,6 +4,7 @@ from useful_methods import genericStateOfVault, genericStateOfStrat
 import random
 import brownie
 
+
 def test_clone(
     chain,
     currency,
@@ -38,9 +39,9 @@ def test_clone(
     assert cloned_lender.lenderName() == "ClonedCompUSDC"
 
     cloned_strategy.addLender(cloned_lender, {"from": gov})
-    
+
     with brownie.reverts():
-        cloned_lender.initialize(cToken, {'from': gov})
+        cloned_lender.initialize(cToken, {"from": gov})
 
     starting_balance = currency.balanceOf(strategist)
     currency = currency

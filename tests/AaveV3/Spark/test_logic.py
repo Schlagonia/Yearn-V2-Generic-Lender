@@ -1,10 +1,10 @@
 import pytest
 import brownie
-from V3.useful_methods import deposit, sleep, close
+from Spark.useful_methods import deposit, sleep, close
 from brownie import Wei, reverts
 
 # Strategy and Vault are imported after plugin has been plugged in
-def test_logic(pluggedVault, pluggedStrategy, v3Plugin, gov, rando, wftm, whale, chain):
+def test_logic(pluggedVault, pluggedStrategy, v3Plugin, gov, rando, dai, whale, chain):
 
     strategy = pluggedStrategy
     vault = pluggedVault
@@ -13,14 +13,14 @@ def test_logic(pluggedVault, pluggedStrategy, v3Plugin, gov, rando, wftm, whale,
     assert v3Plugin.nav() == 0
     # Deposit
     amount = Wei("500 ether")
-    deposit(amount, whale, wftm, vault)
+    deposit(amount, whale, dai, vault)
 
     strategy.harvest({"from": gov})
     assert v3Plugin.hasAssets() == True
     assert v3Plugin.nav() >= amount * 0.999
     assert v3Plugin.nav() == v3Plugin.underlyingBalanceStored()
 
-    deposit(amount, whale, wftm, vault)
+    deposit(amount, whale, dai, vault)
     apr = v3Plugin.apr()
     aprAfter = v3Plugin.aprAfterDeposit(amount)
     assert apr > aprAfter
@@ -35,10 +35,10 @@ def test_logic(pluggedVault, pluggedStrategy, v3Plugin, gov, rando, wftm, whale,
     assert newNav > nav
 
     # withdraw Some
-    wftmBal = wftm.balanceOf(whale.address)
+    daiBal = dai.balanceOf(whale.address)
     vault.withdraw(amount, {"from": whale})
-    wftmAfterBal = wftm.balanceOf(whale.address)
-    assert wftmBal + amount <= wftmAfterBal
+    daiAfterBal = dai.balanceOf(whale.address)
+    assert daiBal + amount <= daiAfterBal
 
     # check triggers with non incentivised
     trigger = v3Plugin.harvestTrigger("100")
@@ -53,16 +53,16 @@ def test_logic(pluggedVault, pluggedStrategy, v3Plugin, gov, rando, wftm, whale,
     assert v3Plugin.weightedApr() == a * n
 
     # withdraw all
-    wftmBal = wftm.balanceOf(whale.address)
+    daiBal = dai.balanceOf(whale.address)
     sleep(chain, 100)
     vault.withdraw({"from": whale})
-    wftmAfterBal = wftm.balanceOf(whale.address)
+    daiAfterBal = dai.balanceOf(whale.address)
 
-    assert wftmBal + amount <= wftmAfterBal
+    assert daiBal + amount <= daiAfterBal
 
 
 def test_emergency_withdraw(
-    pluggedVault, pluggedStrategy, v3Plugin, gov, rando, whale, chain, wftm
+    pluggedVault, pluggedStrategy, v3Plugin, gov, rando, whale, chain, dai
 ):
     strategy = pluggedStrategy
     vault = pluggedVault
@@ -71,7 +71,7 @@ def test_emergency_withdraw(
     assert v3Plugin.nav() == 0
     # Deposit
     amount = Wei("500 ether")
-    deposit(amount, whale, wftm, vault)
+    deposit(amount, whale, dai, vault)
 
     strategy.harvest({"from": gov})
     assert v3Plugin.hasAssets() == True
@@ -81,21 +81,21 @@ def test_emergency_withdraw(
     with brownie.reverts():
         v3Plugin.emergencyWithdraw(v3Plugin.nav(), {"from": rando})
 
-    wftmBal = wftm.balanceOf(gov.address)
+    daiBal = dai.balanceOf(gov.address)
     toWithdraw = amount * 0.1
     v3Plugin.emergencyWithdraw(toWithdraw, {"from": gov})
-    wftmBalAfter = wftm.balanceOf(gov.address)
-    assert wftmBalAfter - toWithdraw == wftmBal
+    daiBalAfter = dai.balanceOf(gov.address)
+    assert daiBalAfter - toWithdraw == daiBal
 
-    wftmBal = wftm.balanceOf(gov.address)
+    daiBal = dai.balanceOf(gov.address)
     nav = v3Plugin.nav()
     v3Plugin.emergencyWithdraw(nav, {"from": gov})
-    wftmBalAfter = wftm.balanceOf(gov.address)
-    assert wftmBalAfter - nav == wftmBal
+    daiBalAfter = dai.balanceOf(gov.address)
+    assert daiBalAfter - nav == daiBal
 
 
 def test__withdrawAll(
-    pluggedVault, pluggedStrategy, v3Plugin, gov, rando, whale, chain, wftm
+    pluggedVault, pluggedStrategy, v3Plugin, gov, rando, whale, chain, dai
 ):
     strategy = pluggedStrategy
     vault = pluggedVault
@@ -104,7 +104,7 @@ def test__withdrawAll(
     assert v3Plugin.nav() == 0
     # Deposit
     amount = Wei("500 ether")
-    deposit(amount, whale, wftm, vault)
+    deposit(amount, whale, dai, vault)
 
     strategy.harvest({"from": gov})
     assert v3Plugin.hasAssets() == True
@@ -114,8 +114,8 @@ def test__withdrawAll(
     with brownie.reverts():
         v3Plugin.withdrawAll({"from": rando})
 
-    wftmBal = wftm.balanceOf(v3Plugin.address)
+    daiBal = dai.balanceOf(v3Plugin.address)
     v3Plugin.withdrawAll({"from": gov})
 
     assert v3Plugin.underlyingBalanceStored() == 0
-    assert wftm.balanceOf(strategy.address) > wftmBal
+    assert dai.balanceOf(strategy.address) > daiBal

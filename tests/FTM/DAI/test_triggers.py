@@ -1,15 +1,8 @@
 from brownie import Wei
 
+
 def test_triggers(
-    ftm_dai,
-    scrDai,
-    chain,
-    whale,
-    vault,
-    strategy,
-    accounts,
-    fn_isolation,
-    Contract
+    ftm_dai, scrDai, chain, whale, vault, strategy, accounts, fn_isolation, Contract
 ):
     strategist = accounts.at(strategy.strategist(), force=True)
     gov = accounts.at(vault.governance(), force=True)
@@ -31,7 +24,7 @@ def test_triggers(
     assert strategy.harvestTrigger(Wei("100_000_000 ether")) == False
     assert strategy.harvestTrigger(1) == False
 
-    chain.sleep(3600*48)
+    chain.sleep(3600 * 48)
     chain.mine(1)
 
     assert strategy.harvestTrigger(1) == True

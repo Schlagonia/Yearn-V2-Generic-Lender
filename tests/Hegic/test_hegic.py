@@ -6,7 +6,16 @@ import brownie
 
 
 def test_normal_hegic(
-    hegic, crHegic, chain, whale, gov, strategist, rando, vault, strategy, fn_isolation,
+    hegic,
+    crHegic,
+    chain,
+    whale,
+    gov,
+    strategist,
+    rando,
+    vault,
+    strategy,
+    fn_isolation,
 ):
 
     currency = hegic

@@ -6,7 +6,16 @@ import brownie
 
 
 def test_good_migration(
-    currency, Strategy, chain, whale, gov, strategist, rando, vault, strategy, fn_isolation
+    currency,
+    Strategy,
+    chain,
+    whale,
+    gov,
+    strategist,
+    rando,
+    vault,
+    strategy,
+    fn_isolation,
 ):
     currency = currency
 
@@ -174,7 +183,16 @@ def test_normal_activity(
 
 
 def test_debt_increase(
-    currency, Strategy, chain, whale, gov, strategist, rando, vault, strategy, fn_isolation
+    currency,
+    Strategy,
+    chain,
+    whale,
+    gov,
+    strategist,
+    rando,
+    vault,
+    strategy,
+    fn_isolation,
 ):
 
     currency = currency
@@ -239,9 +257,9 @@ def test_vault_shares(
     strategist,
     fn_isolation,
 ):
-    deposit_limit = 100_000_000 * (10**currency.decimals())
+    deposit_limit = 100_000_000 * (10 ** currency.decimals())
     debt_ratio = 10_000
-    #currency = currency
+    # currency = currency
     vault.addStrategy(strategy, debt_ratio, 0, 2 ** 256 - 1, 500, {"from": gov})
     vault.setDepositLimit(deposit_limit, {"from": gov})
     decimals = currency.decimals()
@@ -295,14 +313,13 @@ def test_vault_shares(
     gov_share = vault.balanceOf(strategist)
     rew_share = vault.balanceOf(rewards)
     # no profit just aum fee. meaning total balance should be the same
-    assert (
-        (gov_share + whale_share + rew_share) * vault.pricePerShare() / (10 ** decimals)
-        > amount1 * 2 * 0.999
-        and (gov_share + whale_share + rew_share)
-        * vault.pricePerShare()
-        / (10 ** decimals)
-        < amount1 * 2 * 1.001
-    )
+    assert (gov_share + whale_share + rew_share) * vault.pricePerShare() / (
+        10 ** decimals
+    ) > amount1 * 2 * 0.999 and (
+        gov_share + whale_share + rew_share
+    ) * vault.pricePerShare() / (
+        10 ** decimals
+    ) < amount1 * 2 * 1.001
     cToken.accrueAccount(strategy.lenders(0), {"from": strategy.lenders(0)})
     strategy.harvest({"from": strategist})
 
@@ -351,7 +368,7 @@ def test_apr(
     fn_isolation,
 ):
     decimals = currency.decimals()
-    deposit_limit = 100_000_000 * (10**decimals)
+    deposit_limit = 100_000_000 * (10 ** decimals)
     debt_ratio = 10_000
     vault.addStrategy(strategy, debt_ratio, 0, 2 ** 256 - 1, 500, {"from": gov})
     vault.setDepositLimit(deposit_limit, {"from": gov})

@@ -12,10 +12,11 @@ def live_vault_usdc(pm):
     Vault = pm(config["dependencies"][0]).Vault
     yield Vault.at("0xa354F35829Ae975e850e23e9615b11Da1B3dC4DE")
 
+
 @pytest.fixture
 def live_vault_usdt(pm):
     Vault = pm(config["dependencies"][0]).Vault
-    vault = Vault.at('0xAf322a2eDf31490250fdEb0D712621484b09aBB6')
+    vault = Vault.at("0xAf322a2eDf31490250fdEb0D712621484b09aBB6")
     yield vault
 
 
@@ -32,6 +33,7 @@ def live_GenericCream_usdc_1(GenericCream):
 @pytest.fixture
 def live_GenericDyDx_usdc_1(GenericDyDx):
     yield GenericDyDx.at("0x6C842746F21Ca34542EDC6895dFfc8D4e7D2bC1c")
+
 
 # change these fixtures for generic tests
 @pytest.fixture
@@ -52,9 +54,9 @@ def whale(accounts, web3, weth):
     acc = accounts.at("0xBA12222222228d8Ba445958a75a0704d566BF2C8", force=True)
 
     # lots of weth account
-    #wethAcc = accounts.at("0xeBec795c9c8bBD61FFc14A6662944748F299cAcf", force=True)
-    #weth.approve(acc, 2 ** 256 - 1, {"from": wethAcc})
-    #weth.transfer(acc, weth.balanceOf(wethAcc), {"from": wethAcc})
+    # wethAcc = accounts.at("0xeBec795c9c8bBD61FFc14A6662944748F299cAcf", force=True)
+    # weth.approve(acc, 2 ** 256 - 1, {"from": wethAcc})
+    # weth.transfer(acc, weth.balanceOf(wethAcc), {"from": wethAcc})
 
     assert weth.balanceOf(acc) > 0
     yield acc
@@ -151,22 +153,16 @@ def vault(gov, rewards, guardian, currency, pm):
 
 @pytest.fixture
 def strategy(
-    strategist,
-    gov,
-    rewards,
-    keeper,
-    vault,
-    cUsdc,
-    Strategy,
-    GenericCompoundV3,
-    chain
+    strategist, gov, rewards, keeper, vault, cUsdc, Strategy, GenericCompoundV3, chain
 ):
     strategy = strategist.deploy(Strategy, vault)
     strategy.setKeeper(keeper, {"from": gov})
     strategy.setWithdrawalThreshold(0, {"from": gov})
     strategy.setRewards(rewards, {"from": strategist})
 
-    compoundV3Plugin = strategist.deploy(GenericCompoundV3, strategy, "CompoundV3", cUsdc)
+    compoundV3Plugin = strategist.deploy(
+        GenericCompoundV3, strategy, "CompoundV3", cUsdc
+    )
     assert compoundV3Plugin.apr() > 0
 
     strategy.addLender(compoundV3Plugin, {"from": gov})

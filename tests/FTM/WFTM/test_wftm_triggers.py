@@ -1,5 +1,6 @@
 from brownie import Wei
 
+
 def test_wftm_triggers(
     wftm,
     scrWftm,
@@ -32,7 +33,7 @@ def test_wftm_triggers(
     assert strategy.harvestTrigger(Wei("100_000_000 ether")) == False
     assert strategy.harvestTrigger(1) == False
 
-    chain.sleep(3600*48)
+    chain.sleep(3600 * 48)
     chain.mine(1)
 
     assert strategy.harvestTrigger(1) == True

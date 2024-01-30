@@ -34,9 +34,9 @@ def genericStateOfVault(vault, currency):
     print(f"Total Debt: {balance:.5f}")
 
 
-def deposit(amount, user, wftm, vault):
+def deposit(amount, user, dai, vault):
     # print('\n----user deposits----')
-    wftm.approve(vault, amount, {"from": user})
+    dai.approve(vault, amount, {"from": user})
     # print('deposit amount:', amount.to('ether'))
     vault.deposit(amount, {"from": user})
 

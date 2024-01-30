@@ -119,7 +119,12 @@ def xtest_clone(
 
 
 def test_double_initialize(
-    gov, vault, strategy, hegic, GenericCream, crHegic,
+    gov,
+    vault,
+    strategy,
+    hegic,
+    GenericCream,
+    crHegic,
 ):
 
     tx = GenericCream.at(strategy.lenders(0)).cloneCreamLender(

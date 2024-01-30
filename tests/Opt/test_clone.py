@@ -5,15 +5,8 @@ import random
 from brownie import Wei
 from Opt.useful_methods import deposit, sleep, close
 
-def test_v3_clone(
-    plugin,
-    GenericIronBank,
-    strategy,
-    weth,
-    router,
-    router2,
-    op
-):
+
+def test_v3_clone(plugin, GenericIronBank, strategy, weth, router, router2, op):
     tx = plugin.cloneIronBankLender(strategy, plugin.lenderName())
     new_plugin = GenericIronBank.at(tx.return_value)
 
@@ -22,6 +15,7 @@ def test_v3_clone(
     assert plugin.cToken() == new_plugin.cToken()
     assert new_plugin.apr() == plugin.apr()
     assert new_plugin.ignorePrinting() == True
+
 
 def test_clone_trigger(
     plugin,
@@ -35,17 +29,17 @@ def test_clone_trigger(
     vault,
     gov,
     ib,
-    whaleIb
+    whaleIb,
 ):
-    
+
     tx = plugin.cloneIronBankLender(strategy, plugin.lenderName())
     new_plugin = GenericIronBank.at(tx.return_value)
- 
+
     assert plugin.want() == new_plugin.want()
     assert plugin.lenderName() == new_plugin.lenderName()
     assert plugin.cToken() == new_plugin.cToken()
     assert new_plugin.apr() == plugin.apr()
-    vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from":gov})
+    vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
     strategy.addLender(new_plugin, {"from": gov})
     new_plugin.setMiddleSwapToken(weth, False, {"from": gov})
     deposit(10e18, whale, weth, vault)
@@ -54,20 +48,14 @@ def test_clone_trigger(
     assert new_plugin.harvestTrigger("1000000000") == False
     sleep(chain, 1)
     ib.transfer(new_plugin.address, 100e18, {"from": whaleIb})
-    
+
     assert new_plugin.harvestTrigger("1000000000") == True
 
-def test_clone_usdc(
-    plugin,
-    GenericIronBank,
-    strategyUsdc,
-    weth,
-    router,
-    router2,usdc
-):
-    #plugin = pluginUsdc
+
+def test_clone_usdc(plugin, GenericIronBank, strategyUsdc, weth, router, router2, usdc):
+    # plugin = pluginUsdc
     strategy = strategyUsdc
-    
+
     tx = plugin.cloneIronBankLender(strategy, plugin.lenderName())
     new_plugin = GenericIronBank.at(tx.return_value)
 
@@ -75,7 +63,8 @@ def test_clone_usdc(
     assert plugin.lenderName() == new_plugin.lenderName()
     assert plugin.ignorePrinting() == new_plugin.ignorePrinting()
     assert new_plugin.apr() > 0
-    
+
+
 def test_clone_harvest(
     pluginUsdc,
     GenericIronBank,
@@ -92,11 +81,11 @@ def test_clone_harvest(
     weth,
     ib,
     whaleIb,
-    whale
+    whale,
 ):
     plugin = pluginUsdc
-    #strategy = strategyUsdc
-    
+    # strategy = strategyUsdc
+
     tx = plugin.cloneIronBankLender(strategy, plugin.lenderName())
     new_plugin = GenericIronBank.at(tx.return_value)
     apr = plugin.apr()
@@ -105,36 +94,30 @@ def test_clone_harvest(
     assert plugin.lenderName() == new_plugin.lenderName()
     assert plugin.ignorePrinting() == new_plugin.ignorePrinting()
 
-    vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from":gov})
+    vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
     strategy.addLender(new_plugin, {"from": gov})
     deposit(10e18, whale, weth, vault)
     strategy.harvest({"from": gov})
     assert new_plugin.harvestTrigger("100000000") == False
     sleep(chain, 20)
     ib.transfer(new_plugin.address, 1e18, {"from": whaleIb})
-    assert new_plugin.harvestTrigger("100000000") == True 
+    assert new_plugin.harvestTrigger("100000000") == True
     before_bal = new_plugin.underlyingBalanceStored()
     before_stake = new_plugin.stakedBalance()
-    new_plugin.harvest({"from":gov})
+    new_plugin.harvest({"from": gov})
     assert ib.balanceOf(new_plugin.address) == 0
     assert before_bal < new_plugin.underlyingBalanceStored()
     assert before_stake < new_plugin.stakedBalance()
 
 
 def test_double_initialize(
-    plugin,
-    GenericIronBank,
-    strategy,
-    strategist,
-    weth,
-    router,
-    router2
+    plugin, GenericIronBank, strategy, strategist, weth, router, router2
 ):
     tx = plugin.cloneIronBankLender(strategy, plugin.lenderName())
     new_plugin = GenericIronBank.at(tx.return_value)
 
     with brownie.reverts():
-        new_plugin.initialize({"from":strategist})
+        new_plugin.initialize({"from": strategist})
 
 
 def test_clone(
@@ -156,9 +139,7 @@ def test_clone(
     # Clone magic
     tx = strategy.clone(vault)
     cloned_strategy = OptStrategy.at(tx.return_value)
-    cloned_strategy.setWithdrawalThreshold(
-        100, {"from": gov}
-    )
+    cloned_strategy.setWithdrawalThreshold(100, {"from": gov})
     cloned_strategy.setDebtThreshold(strategy.debtThreshold(), {"from": gov})
     cloned_strategy.setProfitFactor(strategy.profitFactor(), {"from": gov})
     cloned_strategy.setMaxReportDelay(strategy.maxReportDelay(), {"from": gov})
@@ -174,9 +155,9 @@ def test_clone(
     assert cloned_lender.lenderName() == "ClonedIBUSDC"
 
     cloned_strategy.addLender(cloned_lender, {"from": gov})
-    
+
     with brownie.reverts():
-        cloned_lender.initialize( {'from': gov})
+        cloned_lender.initialize({"from": gov})
 
     currency = usdc
     decimals = currency.decimals()
@@ -220,7 +201,7 @@ def test_clone(
         chain.sleep(15 * 30)
         chain.mine(waitBlock)
 
-        cloned_lender.harvest({"from":strategist})
+        cloned_lender.harvest({"from": strategist})
         cloned_strategy.harvest({"from": strategist})
         chain.sleep(6 * 3600 + 1)  # to avoid sandwich protection
         chain.mine(1)
